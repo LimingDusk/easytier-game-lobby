@@ -4,7 +4,12 @@ namespace GameLobby;
 
 internal sealed class Lobby : Form
 {
-    private readonly Tunnel tunnel = new();
+    private readonly SessionLog log = new(Path.Combine(Environment.GetFolderPath(
+        Environment.SpecialFolder.LocalApplicationData), "EasyTierGameLobby", "Logs"));
+    private readonly Tunnel tunnel;
+    private readonly TextBox bootstrap = new() { Dock = DockStyle.Top, PlaceholderText = "可选：自定义引导节点（双方使用同一地址），默认使用官方节点" };
+    private readonly Button export = ActionButton("导出日志");
+    private string lastReport = "";
     private readonly ComboBox games = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 280 };
     private readonly TextBox invite = new() { Dock = DockStyle.Top, PlaceholderText = "粘贴好友的邀请码，或创建新房间" };
     private readonly Button host = ActionButton("创建房间");
@@ -16,7 +21,7 @@ internal sealed class Lobby : Form
     private readonly Label guide = new() { AutoSize = true, MaximumSize = new Size(650, 0) };
     private readonly TextBox peers = new() { Multiline = true, ReadOnly = true, WordWrap = false,
         ScrollBars = ScrollBars.Both, Dock = DockStyle.Fill, Font = new Font("Consolas", 10) };
-    private readonly System.Windows.Forms.Timer timer = new() { Interval = 1000 };
+    private readonly System.Windows.Forms.Timer timer = new() { Interval = 4000 };
     private int generation;
     private bool inspecting;
 
@@ -24,10 +29,11 @@ internal sealed class Lobby : Form
 
     public Lobby()
     {
-        Text = "游戏联机大厅";
+        tunnel = new(log);
+        Text = $"游戏联机大厅  {SessionLog.Version}";
         Font = new Font("Microsoft YaHei UI", 10);
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(725, 470);
+        ClientSize = new Size(790, 550);
         MinimumSize = new Size(590, 440);
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 1 };
         Controls.Add(layout);
@@ -44,12 +50,15 @@ internal sealed class Lobby : Form
         games.SelectedIndex = 0;
         Row(games);
         Row(invite);
+        Row(bootstrap);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         actions.Controls.AddRange([host, join, copy, leave]);
         Row(actions);
         Row(status);
         Row(guide);
-        Row(inspect);
+        var diagnostics = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
+        diagnostics.Controls.AddRange([inspect, export]);
+        Row(diagnostics);
         Row(peers, true);
 
         host.Click += (_, _) => StartRoom(true);
@@ -61,18 +70,20 @@ internal sealed class Lobby : Form
             catch (System.Runtime.InteropServices.ExternalException) { status.Text = "剪贴板正忙，请手动复制邀请码。"; }
         };
         inspect.Click += async (_, _) => await RefreshPeers();
-        timer.Tick += (_, _) =>
+        export.Click += (_, _) => ExportLog();
+        timer.Tick += async (_, _) =>
         {
             if (tunnel.ExitCode is int code) EndRoom($"EasyTier 已退出（{code}）。请检查内核文件和虚拟网卡后重试。");
+            else if (!inspecting && tunnel.Running) await RefreshPeers();
         };
-        FormClosed += (_, _) => { generation++; timer.Dispose(); tunnel.Dispose(); };
+        FormClosed += (_, _) => { generation++; timer.Dispose(); tunnel.Dispose(); log.Write("关闭大厅"); };
         SetActive(false);
         status.Text = "请选择游戏，创建房间或使用好友的邀请码加入。";
     }
 
     private void SetActive(bool active)
     {
-        games.Enabled = host.Enabled = join.Enabled = !active;
+        bootstrap.Enabled = games.Enabled = host.Enabled = join.Enabled = !active;
         invite.ReadOnly = active;
         leave.Enabled = copy.Enabled = active;
         inspect.Enabled = active && !inspecting;
@@ -84,16 +95,18 @@ internal sealed class Lobby : Form
         {
             var game = (GameProfile)games.SelectedItem!;
             var room = hosting ? Room.Create(game) : Room.Parse(game, invite.Text);
-            tunnel.Start(room);
+            log.Write($"{(hosting ? "创建" : "加入")} {game.Id} 房间标识 {room.Network}；请求开启 UDP 广播中继");
+            lastReport = "";
+            tunnel.Start(room, bootstrap.Text);
             generation++;
             invite.Text = room.Invite;
             SetActive(true);
-            status.Text = "组网进程已启动。刷新节点可查看虚拟 IP 和连接路径。";
+            status.Text = "组网进程已启动，正在查询节点。";
             guide.Text = hosting ? game.HostGuide : game.GuestGuide;
             timer.Start();
             await RefreshPeers();
         }
-        catch (Exception error) { status.Text = error.Message; }
+        catch (Exception error) { status.Text = error.Message; log.Write("启动失败 " + error.Message); }
     }
 
     private async Task RefreshPeers()
@@ -101,22 +114,49 @@ internal sealed class Lobby : Form
         int current = generation;
         inspecting = true;
         inspect.Enabled = false;
+        async Task<string> Fetch(string command, Func<string, string> render)
+        {
+            try { return render(await tunnel.Query(command)); }
+            catch (Exception error) { return $"查询失败（{command}） {error.Message}"; }
+        }
         try
         {
-            string result = await tunnel.Peers();
-            if (current == generation) peers.Text = result;
+            var reports = await Task.WhenAll(Fetch("peer", NetworkReport.Peers),
+                Fetch("connector", NetworkReport.Connectors), Fetch("stats", NetworkReport.Broadcast));
+            if (current != generation) return;
+            var text = $"{reports[0]}{Environment.NewLine}{Environment.NewLine}引导节点  {reports[1]}{Environment.NewLine}广播中继  {reports[2]}";
+            status.Text = $"最近查询 {DateTime.Now:HH:mm:ss}，每 4 秒自动刷新。";
+            peers.Text = text;
+            if (text != lastReport)
+            {
+                log.Write(text);
+                lastReport = text;
+            }
         }
-        catch (Exception error) { if (current == generation) peers.Text = error.Message; }
         finally
         {
             if (current == generation) { inspecting = false; inspect.Enabled = tunnel.Running; }
         }
     }
 
+    private void ExportLog()
+    {
+        using var dialog = new SaveFileDialog { Filter = "诊断日志 (*.txt)|*.txt", FileName =
+            $"GameLobby-{DateTime.Now:yyyyMMdd-HHmmss}.txt" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            File.WriteAllText(dialog.FileName, log.Snapshot(), System.Text.Encoding.UTF8);
+            status.Text = "已导出最近的诊断记录。";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { status.Text = e.Message; }
+    }
+
     private void EndRoom(string message)
     {
         generation++;
         timer.Stop();
+        log.Write(message);
         tunnel.Stop();
         inspecting = false;
         SetActive(false);

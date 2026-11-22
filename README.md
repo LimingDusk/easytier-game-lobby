@@ -21,3 +21,9 @@
 ## 上游
 
 [EasyTier v2.6.4 发行包与广播中继说明](https://github.com/EasyTier/EasyTier/releases/tag/v2.6.4) · [EasyTier 对应源码及许可证](https://github.com/EasyTier/EasyTier/tree/v2.6.4) · [文明 VI 官方游戏手册](https://downloads.2kgames.com/civilization/vi/manuals/eu/CIV_VI_25TH_ONLINE_MANUAL_AUS.pdf)
+
+## 连接诊断与日志
+
+主窗口每 4 秒查询节点、引导连接和 UDP 广播数据。两台电脑使用相同的邀请码，日志里的房间标识应该一致。若只有本机且引导节点均未连接，可在双方离开房间后填写同一个可达的 EasyTier 共享节点地址，再重新加入。双方能看到彼此虚拟 IP 后，重新进入文明 VI 的本地网络大厅，观察建房、搜房前后的广播计数。计数包括其他应用的广播。
+
+在两台电脑上分别点击「导出日志」，保存最近 600 条带时区的记录。日志包含角色、房间标识、节点名称、虚拟 IP、引导地址、内核错误和广播统计。启动器会隐藏 GL1 邀请码和房间密钥。本地日志位于 `%LOCALAPPDATA%\EasyTierGameLobby\Logs`，每次启动单独记录。
