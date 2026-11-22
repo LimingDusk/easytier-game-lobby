@@ -6,7 +6,7 @@ namespace GameLobby;
 
 internal sealed class Tunnel : IDisposable
 {
-    private readonly string directory = Path.Combine(AppContext.BaseDirectory, "engine");
+    private readonly Lazy<string> engineDirectory = new(EngineBundle.Locate);
     private Process? core;
     private string portal = "";
     public bool Running => core is { HasExited: false };
@@ -14,6 +14,7 @@ internal sealed class Tunnel : IDisposable
 
     private ProcessStartInfo Tool(string file, params string[] args)
     {
+        string directory = engineDirectory.Value;
         string path = Path.Combine(directory, file);
         if (!File.Exists(path))
             throw new FileNotFoundException("缺少 EasyTier 内核文件，请先运行 Install-Engine.cmd。");

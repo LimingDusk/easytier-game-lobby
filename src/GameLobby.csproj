@@ -8,4 +8,13 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>GameLobby</AssemblyName>
   </PropertyGroup>
+  <ItemGroup Condition="'$(EngineArchive)' != ''">
+    <EmbeddedResource Include="$(EngineArchive)" LogicalName="GameLobby.EasyTier.zip" />
+  </ItemGroup>
+  <Target Name="VerifyEngineArchive" BeforeTargets="PrepareForBuild" Condition="'$(EngineArchive)' != ''">
+    <GetFileHash Files="$(EngineArchive)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="EngineHash" />
+    </GetFileHash>
+    <Error Condition="'$(EngineHash)' != '27af91e270e554709b048bd32327fefd2dfce5062ae1e8701af7550c6f525f84'" Text="Unexpected EasyTier archive digest." />
+  </Target>
 </Project>

@@ -1,5 +1,9 @@
 name: Windows build
-on: [push, workflow_dispatch]
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -11,20 +15,37 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet run --project tests/RoomChecks.csproj
-      - run: dotnet publish src/GameLobby.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -o dist
-      - name: Verify pinned engine and launcher arguments
+      - name: Build standalone launcher
         shell: pwsh
         run: |
-          ./scripts/Install-Engine.ps1 -Destination "$env:RUNNER_TEMP/engine"
-          $help = & "$env:RUNNER_TEMP/engine/easytier-core.exe" --help | Out-String
+          $archive = Join-Path $env:RUNNER_TEMP 'easytier.zip'
+          Invoke-WebRequest 'https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip' -OutFile $archive
+          dotnet publish src/GameLobby.csproj -c Release -r win-x64 --self-contained true "-p:EngineArchive=$archive" -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -o dist
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Rename-Item dist/GameLobby.exe GameLobby-win-x64.exe
+          Expand-Archive $archive "$env:RUNNER_TEMP/engine"
+          $core = Get-ChildItem "$env:RUNNER_TEMP/engine" -Recurse -Filter easytier-core.exe
+          $help = & $core.FullName --help | Out-String
           foreach ($flag in '--dhcp','--network-name','--peers','--rpc-portal','--enable-udp-broadcast-relay','ET_NETWORK_SECRET') {
             if (!$help.Contains($flag)) { throw "Missing option $flag" }
           }
-          & "$env:RUNNER_TEMP/engine/easytier-cli.exe" peer --help
+          & (Join-Path $core.DirectoryName 'easytier-cli.exe') peer --help
           if ($LASTEXITCODE) { throw 'Missing peer diagnostics' }
-          Copy-Item scripts/Install-Engine.* dist/
-          Copy-Item README.md dist/
       - uses: actions/upload-artifact@v4
         with:
           name: GameLobby-win-x64
-          path: dist/
+          path: dist/GameLobby-win-x64.exe
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: GameLobby-win-x64
+      - name: Publish executable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" GameLobby-win-x64.exe --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --generate-notes
