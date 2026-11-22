@@ -1,0 +1,30 @@
+name: Windows build
+on: [push, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet run --project tests/RoomChecks.csproj
+      - run: dotnet publish src/GameLobby.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -o dist
+      - name: Verify pinned engine and launcher arguments
+        shell: pwsh
+        run: |
+          ./scripts/Install-Engine.ps1 -Destination "$env:RUNNER_TEMP/engine"
+          $help = & "$env:RUNNER_TEMP/engine/easytier-core.exe" --help | Out-String
+          foreach ($flag in '--dhcp','--network-name','--peers','--rpc-portal','--enable-udp-broadcast-relay','ET_NETWORK_SECRET') {
+            if (!$help.Contains($flag)) { throw "Missing option $flag" }
+          }
+          & "$env:RUNNER_TEMP/engine/easytier-cli.exe" peer --help
+          if ($LASTEXITCODE) { throw 'Missing peer diagnostics' }
+          Copy-Item scripts/Install-Engine.* dist/
+          Copy-Item README.md dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GameLobby-win-x64
+          path: dist/
