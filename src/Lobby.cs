@@ -2,7 +2,7 @@ using GameLobby.Games;
 
 namespace GameLobby;
 
-internal sealed class Lobby : Form
+internal sealed partial class Lobby : Form
 {
     private readonly SessionLog log = new(Path.Combine(Environment.GetFolderPath(
         Environment.SpecialFolder.LocalApplicationData), "EasyTierGameLobby", "Logs"));
@@ -26,42 +26,10 @@ internal sealed class Lobby : Form
     private int generation;
     private bool inspecting;
 
-    private static Button ActionButton(string text) => new() { Text = text, AutoSize = true, Padding = new Padding(6, 3, 6, 3) };
-
     public Lobby()
     {
         tunnel = new(log);
-        Text = $"游戏联机大厅  {SessionLog.Version}";
-        Font = new Font("Microsoft YaHei UI", 10);
-        StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(790, 550);
-        MinimumSize = new Size(590, 440);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 1 };
-        Controls.Add(layout);
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        void Row(Control control, bool fill = false)
-        {
-            int row = layout.RowStyles.Count;
-            layout.RowCount = row + 1;
-            layout.RowStyles.Add(fill ? new RowStyle(SizeType.Percent, 100) : new RowStyle(SizeType.AutoSize));
-            control.Margin = new Padding(0, 3, 0, 7);
-            layout.Controls.Add(control, 0, row);
-        }
-        games.Items.AddRange(GameProfile.All);
-        games.SelectedIndex = 0;
-        Row(games);
-        Row(invite);
-        Row(bootstrap);
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-        actions.Controls.AddRange([host, join, copy, leave]);
-        Row(actions);
-        Row(status);
-        Row(localAddress);
-        Row(guide);
-        var diagnostics = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-        diagnostics.Controls.AddRange([inspect, export]);
-        Row(diagnostics);
-        Row(peers, true);
+        BuildLayout();
 
         host.Click += (_, _) => StartRoom(true);
         join.Click += (_, _) => StartRoom(false);
@@ -80,12 +48,14 @@ internal sealed class Lobby : Form
         };
         FormClosed += (_, _) => { generation++; timer.Dispose(); tunnel.Dispose(); log.Write("关闭大厅"); };
         SetActive(false);
-        status.Text = "请选择游戏，创建房间或使用好友的邀请码加入。";
+        status.Text = "未加入房间";
     }
 
     private void SetActive(bool active)
     {
-        bootstrap.Enabled = games.Enabled = host.Enabled = join.Enabled = !active;
+        bootstrap.Enabled = games.Enabled = !active;
+        host.Visible = join.Visible = !active;
+        leave.Visible = copy.Visible = active;
         invite.ReadOnly = active;
         leave.Enabled = copy.Enabled = active;
         inspect.Enabled = active && !inspecting;
@@ -104,6 +74,8 @@ internal sealed class Lobby : Form
             invite.Text = room.Invite;
             SetActive(true);
             status.Text = "组网进程已启动，正在查询节点。";
+            roomState.Text = hosting ? "房主" : "已加入房间";
+            memberStatus.Text = "正在查找房间成员…";
             guide.Text = hosting ? game.HostGuide : game.GuestGuide;
             timer.Start();
             await RefreshPeers();
@@ -138,12 +110,18 @@ internal sealed class Lobby : Form
                 }
                 if (message != localAddress.Text) { localAddress.Text = message; log.Write(message); }
             }
-            var reports = await Task.WhenAll(Fetch("peer", NetworkReport.Peers),
+            NetworkReport.PeerState? snapshot = null;
+            var reports = await Task.WhenAll(Fetch("peer", json =>
+            {
+                snapshot = NetworkReport.ReadPeers(json);
+                return snapshot.Details;
+            }),
                 Fetch("connector", NetworkReport.Connectors), Fetch("stats", NetworkReport.Broadcast));
             if (current != generation) return;
+            ShowMembers(snapshot);
             var text = $"{reports[0]}{Environment.NewLine}{Environment.NewLine}引导节点  {reports[1]}{Environment.NewLine}广播中继  {reports[2]}";
             status.Text = $"最近查询 {DateTime.Now:HH:mm:ss}，每 4 秒自动刷新。";
-            peers.Text = text;
+            if (peers.Text != text) peers.Text = text;
             if (text != lastReport)
             {
                 log.Write(text);
@@ -177,6 +155,7 @@ internal sealed class Lobby : Form
         tunnel.Stop();
         inspecting = false;
         SetActive(false);
+        ResetMembers();
         localAddress.Text = guide.Text = peers.Text = invite.Text = "";
         status.Text = message;
     }

@@ -72,3 +72,11 @@ foreach (var invalid in new[] { "", "http://example.org:80", "tcp://example.org:
     throw new Exception("Malformed invite endpoint accepted");
 }
 Console.WriteLine("Default, custom, legacy and invalid bootstrap invitation checks passed.");
+
+var waitingRoster = NetworkReport.ReadPeers(localOnly);
+if (waitingRoster.Nodes.Count(n => !n.Shared) != 1 ||
+    waitingRoster.Nodes.Single(n => n.Local).Route != "本机" ||
+    NetworkReport.ReadPeers(pair).Nodes.Single(n => !n.Local).Route != "直连" ||
+    NetworkReport.ReadPeers(pair.Replace("p2p", "relay(2)")).Nodes.Last().Route != "中转")
+    throw new Exception("Roster presentation lost player identity or connection type");
+Console.WriteLine("Room members and connection labels passed.");

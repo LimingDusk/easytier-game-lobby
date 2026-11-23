@@ -7,32 +7,38 @@ internal static class NetworkReport
     private static string Field(JsonElement row, string key) =>
         row.TryGetProperty(key, out var value) ? value.ToString() : "";
 
-    public static string Peers(string json)
+    internal sealed record Member(string Name, string Ip, string Cost)
+    {
+        public bool Local => Cost == "Local";
+        public bool Shared => !Local && Name.StartsWith("PublicServer_", StringComparison.Ordinal);
+        public string Route => Local ? "本机" : Cost switch
+        {
+            "p2p" => "直连", var value when value.StartsWith("relay") => "中转", _ => Cost
+        };
+        public string Address => Ip.Length > 0 ? Ip : Shared ? "—" : "等待虚拟 IP";
+    }
+
+    internal sealed record PeerState(string Summary, Member[] Nodes)
+    {
+        public string Details => string.Join(Environment.NewLine, Nodes.Select(n =>
+            $"{(n.Local ? "本机" : n.Shared ? "共享节点（引导）" : "远端节点")}   {n.Name}   {n.Address}   {n.Cost}").Prepend(Summary));
+    }
+
+    public static PeerState ReadPeers(string json)
     {
         using var doc = JsonDocument.Parse(json);
-        var rows = doc.RootElement.EnumerateArray().ToArray();
-        if (!rows.Any(row => Field(row, "cost") == "Local"))
-            return "内核尚未返回本机节点，正在等待组网。";
-        var lines = new List<string>();
-        int players = 0;
-        bool localReady = false;
-        foreach (var row in rows)
-        {
-            var name = Field(row, "hostname");
-            var cost = Field(row, "cost");
-            var ip = Field(row, "ipv4");
-            var local = cost == "Local";
-            var shared = name.StartsWith("PublicServer_", StringComparison.Ordinal);
-            if (local) localReady = ip.Length > 0;
-            if (!local && !shared && ip.Length > 0) players++;
-            var role = local ? "本机" : shared ? "共享节点（引导）" : "远端节点";
-            lines.Add($"{role}   {name}   {(ip.Length > 0 ? ip : shared ? "—" : "等待虚拟 IP")}   {cost}");
-        }
-        lines.Insert(0, !localReady ? "正在等待本机虚拟 IP。" : players == 0
-            ? "尚未发现队友。请核对房间标识和引导节点。"
-            : $"已发现 {players} 个带虚拟 IP 的远端节点。请双方重新进入文明 VI 的本地网络大厅。");
-        return string.Join(Environment.NewLine, lines);
+        var nodes = doc.RootElement.EnumerateArray().Select(r =>
+            new Member(Field(r, "hostname"), Field(r, "ipv4"), Field(r, "cost"))).ToArray();
+        var local = nodes.FirstOrDefault(n => n.Local);
+        int players = nodes.Count(n => !n.Local && !n.Shared && n.Ip.Length > 0);
+        string summary = local == null ? "内核尚未返回本机节点，正在等待组网。"
+            : local.Ip.Length == 0 ? "正在等待本机虚拟 IP。"
+            : players == 0 ? "尚未发现队友。请确认好友已加入同一房间。"
+            : $"已发现 {players} 位队友，可进入游戏的局域网大厅。";
+        return new PeerState(summary, nodes);
     }
+
+    public static string Peers(string json) => ReadPeers(json).Details;
 
     public static string Connectors(string json)
     {
