@@ -10,6 +10,7 @@
     <AssemblyName>GameLobby</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Assets/LobbyIcons.png" LogicalName="GameLobby.LobbyIcons.png" />
     <EmbeddedResource Include="Assets/GameLobby.ico" LogicalName="GameLobby.GameLobby.ico" />
   </ItemGroup>
   <ItemGroup Condition="'$(EngineArchive)' != ''">

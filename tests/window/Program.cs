@@ -72,6 +72,26 @@ internal static class WindowChecks
                     throw new Exception("Appearance selector or diagnostics button clipped at minimum size.");
                 if (Field<ListView>(form, "members").Visible)
                     throw new Exception("An empty lobby should hide the member table.");
+                var games = Field<ComboBox>(form, "games");
+                if (!games.Visible || games.Items.Count == 0 || games.SelectedItem == null)
+                    throw new Exception("Game selector missing before joining a room.");
+                if (Field<Panel>(form,"mast").BackColor != slider.Parent.BackColor)
+                    throw new Exception("Title bar and footer must use the same background.");
+                var peerType = type.Assembly.GetType("GameLobby.NetworkReport", true)!;
+                var parse = peerType.GetMethod("ReadPeers")!;
+                var show = type.GetMethod("ShowMembers", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                var roster = Field<ListView>(form,"members");
+                foreach (var count in new[] { 2, 12, 1, 0 })
+                {
+                    var rows = Enumerable.Range(0,count).Select(n => new {
+                        hostname = $"PC-{n}", cost = n == 0 ? "Local" : "p2p", ipv4 = $"10.0.0.{n+1}" })
+                        .Append(new { hostname = "PublicServer_test", cost = "p2p", ipv4 = "" });
+                    object? snapshot = parse.Invoke(null,[System.Text.Json.JsonSerializer.Serialize(rows)]);
+                    show.Invoke(form,[snapshot]);
+                    if (roster.Items.Count != count || roster.Visible != (count > 0) ||
+                        Field<Label>(form,"countBadge").Text != $"{count} 人")
+                        throw new Exception("Room member count and visible rows must track joins and departures.");
+                }
                 diagnosticButton.PerformClick();
                 if (Field<TextBox>(form, "peers").BackColor.GetBrightness() >= 0.5f)
                     throw new Exception("Diagnostics did not adopt the dark palette.");

@@ -6,10 +6,10 @@ internal sealed partial class Lobby
 {
     private const int WmNcHitTest = 0x0084;
     private const int WsCaption = 0x00C00000;
-    private MapHeader? mast;
+    private WindowHeader? mast;
 
     // Keep the native sizing frame, system menu and taskbar behavior. Only the
-    // caption moves into the map header.
+    // caption moves into the header.
     protected override CreateParams CreateParams
     {
         get
@@ -74,7 +74,7 @@ internal sealed partial class Lobby
         DwmSetWindowAttribute(Handle, 34, ref noBorder, sizeof(int));
     }
 
-    private void AddWindowButtons(MapHeader header)
+    private void AddWindowButtons(WindowHeader header)
     {
         Button CaptionButton(string glyph, string name, int fromRight)
         {
@@ -83,7 +83,7 @@ internal sealed partial class Lobby
                 Text = glyph, AccessibleName = name, Size = new Size(46, 33),
                 Location = new Point(header.ClientSize.Width - 46 * fromRight, 5),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                BackColor = Ink, ForeColor = Color.White, UseVisualStyleBackColor = false,
+                BackColor = Canvas, ForeColor = Ink, UseVisualStyleBackColor = false,
                 FlatStyle = FlatStyle.Flat, Font = new Font("Segoe MDL2 Assets", 10),
                 AccessibleRole = AccessibleRole.PushButton
             };

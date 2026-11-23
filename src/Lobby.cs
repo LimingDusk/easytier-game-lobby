@@ -8,15 +8,15 @@ internal sealed partial class Lobby : Form
         Environment.SpecialFolder.LocalApplicationData), "EasyTierGameLobby", "Logs"));
     private readonly Tunnel tunnel;
     private readonly TextBox bootstrap = new() { Dock = DockStyle.Top, PlaceholderText = "可选：房主自定义引导节点。留空使用 DreamLife，加入时自动跟随新邀请码" };
-    private readonly Button export = ActionButton("导出日志");
+    private readonly IconButton export = new("导出日志", Glyph.Export);
     private string lastReport = "";
     private readonly ComboBox games = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 280 };
     private readonly TextBox invite = new() { Dock = DockStyle.Top, PlaceholderText = "粘贴好友的邀请码，或创建新房间" };
-    private readonly Button host = ActionButton("创建房间");
-    private readonly Button join = ActionButton("加入房间");
-    private readonly Button copy = ActionButton("复制邀请码");
-    private readonly Button leave = ActionButton("离开房间");
-    private readonly Button inspect = ActionButton("刷新节点");
+    private readonly IconButton host = new("创建房间", Glyph.Plus);
+    private readonly IconButton join = new("加入房间", Glyph.Join);
+    private readonly IconButton copy = new("复制邀请码", Glyph.Copy);
+    private readonly IconButton leave = new("离开房间", Glyph.Leave);
+    private readonly IconButton inspect = new("刷新", Glyph.Refresh, true);
     private readonly Label status = new() { AutoSize = true };
     private readonly Label localAddress = new() { AutoSize = true };
     private readonly Label guide = new() { AutoSize = true, MaximumSize = new Size(650, 0) };
@@ -37,7 +37,7 @@ internal sealed partial class Lobby : Form
         copy.Click += (_, _) =>
         {
             try { Clipboard.SetText(invite.Text); status.Text = "邀请码已复制，请发给一起游玩的好友。"; }
-            catch (System.Runtime.InteropServices.ExternalException) { status.Text = "剪贴板正忙，请勾选「显示邀请码」后手动复制。"; }
+            catch (System.Runtime.InteropServices.ExternalException) { status.Text = "剪贴板正忙，请点眼睛图标后手动复制。"; }
         };
         inspect.Click += async (_, _) => await RefreshPeers();
         export.Click += (_, _) => ExportLog();
@@ -46,7 +46,7 @@ internal sealed partial class Lobby : Form
             if (tunnel.ExitCode is int code) EndRoom($"EasyTier 已退出（{code}）。请检查内核文件和虚拟网卡后重试。");
             else if (!inspecting && tunnel.Running) await RefreshPeers();
         };
-        FormClosed += (_, _) => { generation++; timer.Dispose(); tunnel.Dispose(); log.Write("关闭大厅"); };
+        FormClosed += (_, _) => { generation++; timer.Dispose(); tips.Dispose(); rowHeight.Dispose(); tunnel.Dispose(); log.Write("关闭大厅"); };
         SetActive(false);
         status.Text = "未加入房间";
     }
@@ -57,10 +57,15 @@ internal sealed partial class Lobby : Form
         host.Visible = join.Visible = !active;
         leave.Visible = copy.Visible = active;
         invite.ReadOnly = active;
-        reveal.Checked = false;
+        revealed = false;
+        reveal.AccessibleName = "显示邀请码";
+        tips.SetToolTip(reveal, reveal.AccessibleName);
         reveal.Visible = active;
         invite.UseSystemPasswordChar = active;
         leave.Enabled = copy.Enabled = active;
+        inspect.Visible = active;
+        emptyTitle.Text = active ? "正在查询房间成员" : "等待加入房间";
+        guideBar.Visible = active;
         inspect.Enabled = active && !inspecting;
     }
 
@@ -78,7 +83,8 @@ internal sealed partial class Lobby : Form
             SetActive(true);
             connectorSummary.Text = broadcastSummary.Text = "正在查询…";
             status.Text = "组网进程已启动，正在查询节点。";
-            roomState.Text = hosting ? "房主" : "已加入房间";
+            roomState.Text = "●  正在组网";
+            guideTitle.Text = hosting ? "房主开房步骤" : "加入游戏步骤";
             memberStatus.Text = "正在查找房间成员…";
             guide.Text = hosting ? game.HostGuide : game.GuestGuide;
             timer.Start();
@@ -115,19 +121,30 @@ internal sealed partial class Lobby : Form
                 if (message != localAddress.Text) { localAddress.Text = message; log.Write(message); }
             }
             NetworkReport.PeerState? snapshot = null;
+            NetworkReport.BroadcastCounts? counts = null;
             var reports = await Task.WhenAll(Fetch("peer", json =>
             {
                 snapshot = NetworkReport.ReadPeers(json);
                 return snapshot.Details;
             }),
-                Fetch("connector", NetworkReport.Connectors), Fetch("stats", NetworkReport.Broadcast));
+                Fetch("connector", NetworkReport.Connectors), Fetch("stats", json =>
+                {
+                    counts = NetworkReport.ReadBroadcast(json);
+                    return counts?.ToString() ?? "内核尚未报告广播计数。";
+                }));
             if (current != generation) return;
             ShowMembers(snapshot);
+            roomState.Text = snapshot?.Nodes.Any(n => n.Local && n.Ip.Length > 0) == true ? "●  房间已连接" : "●  正在组网";
+            roomState.ForeColor = roomState.Text.Contains("已连接") ? Connected : SecondaryText;
+            UpdateDiagnostics(snapshot, reports[0]);
             var text = $"{reports[0]}{Environment.NewLine}{Environment.NewLine}引导节点  {reports[1]}{Environment.NewLine}广播中继  {reports[2]}";
             status.Text = $"最近查询 {DateTime.Now:HH:mm:ss} · 自动刷新";
             connectorSummary.Text = reports[1];
             broadcastSummary.Text = reports[2];
-            if (peers.Text != reports[0]) peers.Text = reports[0];
+            broadcastSummary.Visible = counts == null;
+            broadcastGrid.Visible = counts != null;
+            if (counts != null) (captured.Text,forwarded.Text,failed.Text) = (counts.Captured,counts.Forwarded,counts.Failed);
+
             if (text != lastReport)
             {
                 log.Write(text);
@@ -162,7 +179,7 @@ internal sealed partial class Lobby : Form
         inspecting = false;
         SetActive(false);
         ResetMembers();
-        localAddress.Text = guide.Text = peers.Text = invite.Text = "";
+        localAddress.Text = guide.Text = invite.Text = "";
         status.Text = message;
     }
 }

@@ -27,18 +27,12 @@ internal sealed partial class Lobby
         };
         appearance.SelectedIndex = (int)themeMode;
         appearance.SelectionChanged += (_, _) => SelectTheme((ThemeMode)appearance.SelectedIndex);
-        members.OwnerDraw = true;
-        members.DrawItem += (_, e) => e.DrawDefault = true;
-        members.DrawSubItem += (_, e) => e.DrawDefault = true;
-        members.DrawColumnHeader += (_, e) =>
-        {
-            using var background = new SolidBrush(darkTheme ? Color.FromArgb(43, 59, 70) : Canvas);
-            e.Graphics.FillRectangle(background, e.Bounds);
-            var bounds = Rectangle.Inflate(e.Bounds, -4, 0);
-            TextRenderer.DrawText(e.Graphics, e.Header?.Text, members.Font, bounds, members.ForeColor,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-        };
-        games.FlatStyle = FlatStyle.Flat;
+        StyleTable(members, true);
+        StyleTable(diagnosticNodes, false);
+        void SizeRows() => rowHeight.ImageSize = new Size(1, Math.Clamp(LogicalToDeviceUnits(39), 16, 256));
+        SizeRows();
+        members.SmallImageList = diagnosticNodes.SmallImageList = rowHeight;
+        DpiChanged += (_, _) => SizeRows();
         themeInitialized = true;
         ApplyTheme();
     }
@@ -64,49 +58,97 @@ internal sealed partial class Lobby
         if (themeMode == ThemeMode.System && ShouldUseDark() != darkTheme) ApplyTheme();
     }
 
+    private Color Surface => darkTheme ? Color.FromArgb(29,40,57) : Color.White;
+    private Color SecondaryText => darkTheme ? Color.FromArgb(176,191,208) : Color.FromArgb(86,103,128);
+    private Color Highlight => darkTheme ? Color.FromArgb(154,188,255) : Accent;
+    private Color Tint => darkTheme ? Color.FromArgb(38,59,96) : Color.FromArgb(233,239,253);
+    private Color FieldColor => darkTheme ? Color.FromArgb(37,50,70) : Color.FromArgb(241,244,249);
+    private Color Edge => darkTheme ? Color.FromArgb(52,66,88) : Color.FromArgb(219,226,236);
+    private Color Connected => darkTheme ? Color.FromArgb(101,213,164) : Color.FromArgb(33,132,94);
+
+    private void StyleTable(ListView table, bool roster)
+    {
+        table.OwnerDraw = true;
+        table.DrawColumnHeader += (_, e) =>
+        {
+            using var fill = new SolidBrush(FieldColor);
+            e.Graphics.FillRectangle(fill,e.Bounds);
+            TextRenderer.DrawText(e.Graphics,e.Header?.Text,table.Font,Rectangle.Inflate(e.Bounds,-5,0),SecondaryText,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        };
+        table.DrawSubItem += (_, e) =>
+        {
+            if (e.Item == null || e.SubItem == null) return;
+            var g = e.Graphics;
+            var bounds = e.Bounds;
+            bool selected = e.Item.Selected;
+            using var bg = new SolidBrush(selected ? Tint : Surface);
+            g.FillRectangle(bg,bounds);
+            using var edge = new Pen(Edge);
+            g.DrawLine(edge,bounds.Left,bounds.Bottom-1,bounds.Right,bounds.Bottom-1);
+            int x = bounds.Left + LogicalToDeviceUnits(5);
+            var text = e.SubItem.Text;
+            if (roster && e.ColumnIndex == 0)
+            {
+                int size = LogicalToDeviceUnits(28);
+                var badge = new Rectangle(x,bounds.Top+(bounds.Height-size)/2,size,size);
+                using var path = LobbyArt.Rounded(badge, LogicalToDeviceUnits(6));
+                using var fill = new SolidBrush(Tint);
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.FillPath(fill,path);
+                string initial = text.Length == 0 ? "?" : System.Globalization.StringInfo.GetNextTextElement(text);
+                TextRenderer.DrawText(g,initial,table.Font,badge,Highlight,TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                x += size + LogicalToDeviceUnits(8);
+            }
+            if (roster && e.ColumnIndex == 2)
+            {
+                int size = LogicalToDeviceUnits(7);
+                using var color = new SolidBrush(text == "直连" ? Connected : text == "本机" ? SecondaryText : Highlight);
+                g.FillEllipse(color,x,bounds.Top+(bounds.Height-size)/2,size,size);
+                x += size + LogicalToDeviceUnits(6);
+            }
+            var field = Rectangle.FromLTRB(x,bounds.Top,bounds.Right,bounds.Bottom);
+            TextRenderer.DrawText(g,text,table.Font,field,table.ForeColor,TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
+                TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            if (selected && table.Focused && e.ColumnIndex == 0)
+                ControlPaint.DrawFocusRectangle(g,bounds,table.ForeColor,Tint);
+        };
+    }
+
     private void ApplyTheme()
     {
         darkTheme = ShouldUseDark();
-        Color canvas = darkTheme ? Color.FromArgb(20, 30, 38) : Canvas;
-        Color surface = darkTheme ? Color.FromArgb(31, 44, 54) : Color.White;
-        Color text = darkTheme ? Color.FromArgb(232, 239, 242) : Ink;
-        Color muted = darkTheme ? Color.FromArgb(183, 201, 209) : Muted;
-        Color accent = darkTheme ? Color.FromArgb(132, 214, 210) : Accent;
-        Color field = darkTheme ? Color.FromArgb(23, 35, 43) : Color.White;
+        Color canvas = darkTheme ? Color.FromArgb(20,28,43) : Canvas;
+        Color text = darkTheme ? Color.FromArgb(237,243,254) : Ink;
+        Color action = darkTheme ? Color.FromArgb(139,178,255) : Accent;
 
         void PaintControl(Control c)
         {
-            // The branded header keeps its own contrast and caption-button treatments.
-            if (c is MapHeader) return;
             c.ForeColor = text;
+            c.BackColor = c.Parent?.BackColor ?? canvas;
             switch (c)
             {
-                case Button b:
-                    bool primary = b == host || b == copy;
-                    b.BackColor = primary ? accent : surface;
-                    b.ForeColor = primary ? (darkTheme ? Ink : Color.White) : text;
-                    b.FlatAppearance.BorderColor = darkTheme ? Color.FromArgb(86, 112, 120) : Color.FromArgb(176, 198, 202);
-                    b.FlatAppearance.MouseOverBackColor = primary
-                        ? (darkTheme ? Color.FromArgb(156, 226, 220) : Color.FromArgb(7, 83, 92))
-                        : (darkTheme ? Color.FromArgb(48, 65, 75) : Canvas);
+                case SurfacePanel panel: panel.BackColor = Surface; panel.Edge = Edge; break;
+                case IconButton button:
+                    bool primary = button == host || button == copy;
+                    button.BackColor = primary ? action : button.Quiet ? c.BackColor : Surface;
+                    button.ForeColor = primary ? (darkTheme ? Ink : Color.White) : text;
+                    button.EdgeColor = primary ? action : Edge;
+                    button.HoverColor = primary ? (darkTheme ? Color.LightSteelBlue : Color.RoyalBlue) : Tint;
                     break;
-                case ListView:
-                    c.BackColor = surface;
+                case Button caption when c.Parent is WindowHeader:
+                    caption.FlatAppearance.MouseOverBackColor = caption.AccessibleName == "关闭" ? Color.IndianRed : Tint;
                     break;
-                case TextBox or ComboBox:
-                    c.BackColor = c == peers ? canvas : c == invite ? (darkTheme ? field : Canvas) : field;
-                    break;
-                case Label:
-                    c.ForeColor = c == localAddress || c == roomState ? accent :
-                        c == status || c == guide || c == memberStatus ? muted : text;
-                    break;
-                default:
-                    c.BackColor = c.Tag switch
-                    {
-                        "surface" => surface, "field" => darkTheme ? field : Canvas, _ => c.Parent?.BackColor ?? canvas
-                    };
+                case ListView: c.BackColor = Surface; break;
+                case ComboBox or TextBox: c.BackColor = c == peers ? Surface : FieldColor; break;
+                case Label label when label == status || label == guide || label == memberStatus || label == localAddress:
+                    c.ForeColor = SecondaryText;
                     break;
             }
+            if (c.Tag as string == "field") c.BackColor = FieldColor;
+            if (c.Tag as string == "symbol") c.ForeColor = Highlight;
+            if (c == roomState) c.ForeColor = roomState.Text.Contains("已连接") ? Connected : SecondaryText;
+            if (c == countBadge) { c.BackColor = Tint; c.ForeColor = Highlight; }
             foreach (Control child in c.Controls) PaintControl(child);
         }
 
@@ -114,10 +156,10 @@ internal sealed partial class Lobby
         try
         {
             PaintControl(this);
-            appearance.TrackColor = darkTheme ? Color.FromArgb(51, 68, 79) : Color.FromArgb(214, 226, 230);
-            appearance.ThumbColor = accent;
-            appearance.SelectedText = darkTheme ? Ink : Color.White;
-            appearance.Invalidate();
+            appearance.TrackColor = FieldColor;
+            appearance.ThumbColor = Surface;
+            appearance.SelectedText = Highlight;
+            appearance.ForeColor = SecondaryText;
             ApplyFrameColors();
             Invalidate(true);
         }

@@ -17,7 +17,7 @@ internal sealed class AppearanceSlider : Control
         AccessibleName = "外观";
         AccessibleDescription = "拖动滑块、点击选项或使用左右方向键选择外观";
         AccessibleRole = AccessibleRole.Slider;
-        Size = new Size(224, 36);
+        Size = new Size(158, 38);
         Anchor = AnchorStyles.Right;
         Margin = new Padding(6, 4, 12, 4);
     }
@@ -121,14 +121,14 @@ internal sealed class AppearanceSlider : Control
         using var thumb = Capsule(new RectangleF(Inset + SegmentWidth * position, Inset, SegmentWidth, Height - 2 * Inset));
         using var thumbBrush = new SolidBrush(ThumbColor);
         g.FillPath(thumbBrush, thumb);
-        // Paint text twice with a clip so it retains contrast on both sides of a moving thumb.
+        // Paint glyphs twice with a clip so it retains contrast on both sides of a moving thumb.
         void Labels(Color color)
         {
             for (int i = 0; i < Names.Length; i++)
             {
-                var rect = Rectangle.Round(new RectangleF(Inset + SegmentWidth * i, 0, SegmentWidth, Height));
-                TextRenderer.DrawText(g, Names[i], Font, rect, color, TextFormatFlags.HorizontalCenter |
-                    TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.PreserveGraphicsClipping);
+                int size = LogicalToDeviceUnits(20);
+                int x = (int)(Inset + SegmentWidth * (i + .5f)) - size / 2;
+                LobbyArt.Draw(g, (Glyph)((int)Glyph.Monitor + i), new Rectangle(x, (Height-size)/2, size, size), color);
             }
         }
         Labels(ForeColor);

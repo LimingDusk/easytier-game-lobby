@@ -52,7 +52,14 @@ internal static class NetworkReport
         return rows.Length == 0 ? "暂无引导连接" : string.Join("  ", rows);
     }
 
-    public static string Broadcast(string json)
+    internal sealed record BroadcastCounts(string Captured, string Forwarded, string Failed)
+    {
+        public override string ToString() => $"捕获 {Captured}，转发 {Forwarded}，转发失败 {Failed}（本机全部 UDP 广播）";
+    }
+
+    public static string Broadcast(string json) => ReadBroadcast(json)?.ToString() ?? "内核尚未报告广播计数。";
+
+    public static BroadcastCounts? ReadBroadcast(string json)
     {
         using var doc = JsonDocument.Parse(json);
         var counts = new Dictionary<string, string>();
@@ -60,8 +67,8 @@ internal static class NetworkReport
             counts[Field(row, "name")] = Field(row, "value");
         const string prefix = "udp_broadcast_relay_packets_";
         if (!counts.Keys.Any(k => k.StartsWith(prefix, StringComparison.Ordinal)))
-            return "内核尚未报告广播计数。";
+            return null;
         string Count(string suffix) => counts.GetValueOrDefault(prefix + suffix, "—");
-        return $"捕获 {Count("captured")}，转发 {Count("forwarded")}，转发失败 {Count("forward_failed")}（本机全部 UDP 广播）";
+        return new BroadcastCounts(Count("captured"), Count("forwarded"), Count("forward_failed"));
     }
 }
