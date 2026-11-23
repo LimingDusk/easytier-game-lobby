@@ -25,8 +25,8 @@ internal static class NetworkReport
             var shared = name.StartsWith("PublicServer_", StringComparison.Ordinal);
             if (local) localReady = ip.Length > 0;
             if (!local && !shared && ip.Length > 0) players++;
-            var role = local ? "本机" : shared ? "共享节点" : "远端节点";
-            lines.Add($"{role}   {name}   {(ip.Length > 0 ? ip : "等待虚拟 IP")}   {cost}");
+            var role = local ? "本机" : shared ? "共享节点（引导）" : "远端节点";
+            lines.Add($"{role}   {name}   {(ip.Length > 0 ? ip : shared ? "—" : "等待虚拟 IP")}   {cost}");
         }
         lines.Insert(0, !localReady ? "正在等待本机虚拟 IP。" : players == 0
             ? "尚未发现队友。请核对房间标识和引导节点。"

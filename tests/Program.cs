@@ -43,3 +43,10 @@ try
 }
 finally { folder.Delete(true); }
 Console.WriteLine("Diagnostics checks passed.");
+
+if (HostNetwork.Choose([]).ToString() != "10.126.126.1" ||
+    HostNetwork.Choose([(System.Net.IPAddress.Parse("10.126.126.200"), 25)]).ToString() == "10.126.126.1" ||
+    !HostNetwork.Choose([(System.Net.IPAddress.Parse("10.99.0.1"), 8)]).ToString().StartsWith("172."))
+    throw new Exception("Host subnet conflict detection failed");
+if (NetworkReport.Peers(localOnly).Contains("等待虚拟 IP"))
+    throw new Exception("Bootstrap is incorrectly waiting for a player IP");

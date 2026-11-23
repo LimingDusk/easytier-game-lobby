@@ -9,6 +9,7 @@ internal sealed class Tunnel(SessionLog log) : IDisposable
     private readonly Lazy<string> engineDirectory = new(EngineBundle.Locate);
     private Process? core;
     private string portal = "";
+    public IPAddress? HostAddress { get; private set; }
     public bool Running => core is { HasExited: false };
     public int? ExitCode => core is { HasExited: true } p ? p.ExitCode : null;
 
@@ -23,7 +24,7 @@ internal sealed class Tunnel(SessionLog log) : IDisposable
         return info;
     }
 
-    public void Start(Room room, string bootstrap)
+    public void Start(Room room, string bootstrap, bool hosting)
     {
         if (Running) throw new InvalidOperationException("请先离开当前房间。");
         Stop();
@@ -42,8 +43,16 @@ internal sealed class Tunnel(SessionLog log) : IDisposable
             servers = [bootstrap.Trim()];
         else throw new FormatException("引导地址格式应为 tcp://主机:端口 或 udp://主机:端口。");
         log.Write("引导节点 " + string.Join("  ", servers));
-        var info = Tool("easytier-core.exe", "--dhcp", "--network-name", room.Network,
-            "--rpc-portal", portal, "--console-log-level", "warn", "--peers");
+        var address = hosting ? HostNetwork.Choose() : null;
+        var info = Tool("easytier-core.exe", "--network-name", room.Network,
+            "--rpc-portal", portal, "--console-log-level", "warn", "--dhcp", hosting ? "false" : "true");
+        if (address != null)
+        {
+            info.ArgumentList.Add("--ipv4");
+            info.ArgumentList.Add($"{address}/24");
+            log.Write($"房主虚拟网卡申请地址 {address}/24");
+        }
+        info.ArgumentList.Add("--peers");
         foreach (var server in servers) info.ArgumentList.Add(server);
         info.Environment["ET_NETWORK_SECRET"] = room.Secret;
         if (room.Game.RelayBroadcast) info.ArgumentList.Add("--enable-udp-broadcast-relay");
@@ -56,6 +65,7 @@ internal sealed class Tunnel(SessionLog log) : IDisposable
             core.Start();
             core.BeginOutputReadLine();
             core.BeginErrorReadLine();
+            HostAddress = address;
         }
         catch
         {
@@ -99,6 +109,7 @@ internal sealed class Tunnel(SessionLog log) : IDisposable
 
     public void Stop()
     {
+        HostAddress = null;
         if (core is null) return;
         if (!core.HasExited)
         {
