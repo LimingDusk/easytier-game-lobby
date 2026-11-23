@@ -2,6 +2,8 @@
 
 用 EasyTier 把异地玩家的 Windows 电脑连进同一个虚拟网络，再从《文明 VI》的本地网络大厅加入对局。首版面向 Windows 10/11 x64。实际跨网搜房和回合推进待双机实测。
 
+窗口底部的「外观」支持跟随 Windows 应用模式、浅色和深色。首次启动跟随系统，手动选择会保存到当前 Windows 账户。
+
 ## 玩家使用
 
 1. 双方从 [Releases](https://github.com/LimingDusk/easytier-game-lobby/releases) 下载 `GameLobby-win-x64.exe`。

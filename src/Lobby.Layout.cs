@@ -41,7 +41,7 @@ internal sealed partial class Lobby
 
     private static TableLayoutPanel Stack(Color background, int padding = 0) => new()
     {
-        ColumnCount = 1, Dock = DockStyle.Fill, BackColor = background,
+        ColumnCount = 1, Dock = DockStyle.Fill, BackColor = background, Tag = background == Color.White ? "surface" : null,
         Margin = Padding.Empty, Padding = new Padding(padding),
         ColumnStyles = { new ColumnStyle(SizeType.Percent, 100) }
     };
@@ -153,14 +153,16 @@ internal sealed partial class Lobby
         diagnostics.Visible = false;
         pages.Controls.Add(main);
         pages.Controls.Add(diagnostics);
-        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2,
+        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 3,
             Padding = new Padding(23, 0, 14, 9), Margin = Padding.Empty };
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         status.Anchor = AnchorStyles.Left;
         status.ForeColor = Muted;
         footer.Controls.Add(status, 0, 0);
-        footer.Controls.Add(diagnosticsToggle, 1, 0);
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        footer.Controls.Add(themeButton, 1, 0);
+        footer.Controls.Add(diagnosticsToggle, 2, 0);
         Row(root, footer);
         diagnosticsToggle.Click += (_, _) =>
         {
@@ -169,6 +171,7 @@ internal sealed partial class Lobby
             diagnostics.Visible = diagnosticsOpen;
             diagnosticsToggle.Text = diagnosticsOpen ? "返回联机大厅" : "网络诊断";
         };
+        InitializeTheme();
         ResetMembers();
         ResumeLayout(true);
     }
