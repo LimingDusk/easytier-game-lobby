@@ -9,7 +9,7 @@ internal sealed class SessionLog
     private readonly object gate = new();
     private readonly string path;
     private long bytes;
-    internal const string Version = "0.1.0-alpha.8";
+    internal const string Version = "0.1.0-alpha.9";
     public string? DiskError { get; private set; }
 
     public SessionLog(string folder)

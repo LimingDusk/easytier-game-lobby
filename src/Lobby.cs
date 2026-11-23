@@ -37,7 +37,7 @@ internal sealed partial class Lobby : Form
         copy.Click += (_, _) =>
         {
             try { Clipboard.SetText(invite.Text); status.Text = "邀请码已复制，请发给一起游玩的好友。"; }
-            catch (System.Runtime.InteropServices.ExternalException) { status.Text = "剪贴板正忙，请手动复制邀请码。"; }
+            catch (System.Runtime.InteropServices.ExternalException) { status.Text = "剪贴板正忙，请勾选「显示邀请码」后手动复制。"; }
         };
         inspect.Click += async (_, _) => await RefreshPeers();
         export.Click += (_, _) => ExportLog();
@@ -57,6 +57,9 @@ internal sealed partial class Lobby : Form
         host.Visible = join.Visible = !active;
         leave.Visible = copy.Visible = active;
         invite.ReadOnly = active;
+        reveal.Checked = false;
+        reveal.Visible = active;
+        invite.UseSystemPasswordChar = active;
         leave.Enabled = copy.Enabled = active;
         inspect.Enabled = active && !inspecting;
     }
@@ -73,6 +76,7 @@ internal sealed partial class Lobby : Form
             generation++;
             invite.Text = room.Invite;
             SetActive(true);
+            connectorSummary.Text = broadcastSummary.Text = "正在查询…";
             status.Text = "组网进程已启动，正在查询节点。";
             roomState.Text = hosting ? "房主" : "已加入房间";
             memberStatus.Text = "正在查找房间成员…";
@@ -120,8 +124,10 @@ internal sealed partial class Lobby : Form
             if (current != generation) return;
             ShowMembers(snapshot);
             var text = $"{reports[0]}{Environment.NewLine}{Environment.NewLine}引导节点  {reports[1]}{Environment.NewLine}广播中继  {reports[2]}";
-            status.Text = $"最近查询 {DateTime.Now:HH:mm:ss}，每 4 秒自动刷新。";
-            if (peers.Text != text) peers.Text = text;
+            status.Text = $"最近查询 {DateTime.Now:HH:mm:ss} · 自动刷新";
+            connectorSummary.Text = reports[1];
+            broadcastSummary.Text = reports[2];
+            if (peers.Text != reports[0]) peers.Text = reports[0];
             if (text != lastReport)
             {
                 log.Write(text);

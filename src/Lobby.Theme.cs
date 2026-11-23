@@ -7,8 +7,7 @@ internal sealed partial class Lobby
     private enum ThemeMode { System, Light, Dark }
     private const string PreferenceKey = @"HKEY_CURRENT_USER\Software\EasyTierGameLobby";
     private const string WindowsThemeKey = @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
-    private readonly Button themeButton = ActionButton("外观");
-    private readonly ContextMenuStrip themeMenu = new();
+    private readonly AppearanceSlider appearance = new();
     private ThemeMode themeMode;
     private bool darkTheme;
     private bool themeInitialized;
@@ -26,15 +25,8 @@ internal sealed partial class Lobby
         {
             "Light" => ThemeMode.Light, "Dark" => ThemeMode.Dark, _ => ThemeMode.System
         };
-        foreach (var (name, mode) in new[] { ("跟随系统", ThemeMode.System), ("浅色", ThemeMode.Light), ("深色", ThemeMode.Dark) })
-        {
-            var item = new ToolStripMenuItem(name) { Tag = mode };
-            item.Click += (_, _) => SelectTheme(mode);
-            themeMenu.Items.Add(item);
-        }
-        themeButton.AccessibleName = "选择外观";
-        themeButton.Click += (_, _) => themeMenu.Show(themeButton, new Point(0, 0), ToolStripDropDownDirection.AboveRight);
-        FormClosed += (_, _) => themeMenu.Dispose();
+        appearance.SelectedIndex = (int)themeMode;
+        appearance.SelectionChanged += (_, _) => SelectTheme((ThemeMode)appearance.SelectedIndex);
         members.OwnerDraw = true;
         members.DrawItem += (_, e) => e.DrawDefault = true;
         members.DrawSubItem += (_, e) => e.DrawDefault = true;
@@ -93,20 +85,26 @@ internal sealed partial class Lobby
                     bool primary = b == host || b == copy;
                     b.BackColor = primary ? accent : surface;
                     b.ForeColor = primary ? (darkTheme ? Ink : Color.White) : text;
-                    b.FlatAppearance.BorderColor = darkTheme ? Muted : Ink;
+                    b.FlatAppearance.BorderColor = darkTheme ? Color.FromArgb(86, 112, 120) : Color.FromArgb(176, 198, 202);
+                    b.FlatAppearance.MouseOverBackColor = primary
+                        ? (darkTheme ? Color.FromArgb(156, 226, 220) : Color.FromArgb(7, 83, 92))
+                        : (darkTheme ? Color.FromArgb(48, 65, 75) : Canvas);
                     break;
                 case ListView:
                     c.BackColor = surface;
                     break;
                 case TextBox or ComboBox:
-                    c.BackColor = c == peers ? canvas : field;
+                    c.BackColor = c == peers ? canvas : c == invite ? (darkTheme ? field : Canvas) : field;
                     break;
                 case Label:
                     c.ForeColor = c == localAddress || c == roomState ? accent :
                         c == status || c == guide || c == memberStatus ? muted : text;
                     break;
                 default:
-                    c.BackColor = Equals(c.Tag, "surface") ? surface : c.Parent?.BackColor ?? canvas;
+                    c.BackColor = c.Tag switch
+                    {
+                        "surface" => surface, "field" => darkTheme ? field : Canvas, _ => c.Parent?.BackColor ?? canvas
+                    };
                     break;
             }
             foreach (Control child in c.Controls) PaintControl(child);
@@ -116,16 +114,10 @@ internal sealed partial class Lobby
         try
         {
             PaintControl(this);
-            themeMenu.BackColor = surface;
-            themeMenu.ForeColor = text;
-            themeMenu.RenderMode = ToolStripRenderMode.System;
-            foreach (ToolStripMenuItem item in themeMenu.Items)
-            {
-                item.Checked = Equals(item.Tag, themeMode);
-                item.BackColor = surface;
-                item.ForeColor = text;
-                if (item.Checked) themeButton.Text = $"外观 · {item.Text}";
-            }
+            appearance.TrackColor = darkTheme ? Color.FromArgb(51, 68, 79) : Color.FromArgb(214, 226, 230);
+            appearance.ThumbColor = accent;
+            appearance.SelectedText = darkTheme ? Ink : Color.White;
+            appearance.Invalidate();
             ApplyFrameColors();
             Invalidate(true);
         }
