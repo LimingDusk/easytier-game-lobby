@@ -8,7 +8,7 @@ if (guest.Network != host.Network || guest.Secret != host.Secret || !game.RelayB
     throw new Exception("Invite round trip or discovery profile failed.");
 if (Room.Create(game).Network == host.Network || host.Network.Contains(host.Secret))
     throw new Exception("Room isolation failed.");
-foreach (string bad in new[] { "", host.Invite + "x", host.Invite.Replace("CIV6", "OTHER") })
+foreach (string bad in new[] { "", host.Invite + "|extra", host.Invite.Replace("CIV6", "OTHER") })
 {
     try { Room.Parse(game, bad); }
     catch (FormatException) { continue; }
@@ -50,3 +50,25 @@ if (HostNetwork.Choose([]).ToString() != "10.126.126.1" ||
     throw new Exception("Host subnet conflict detection failed");
 if (NetworkReport.Peers(localOnly).Contains("等待虚拟 IP"))
     throw new Exception("Bootstrap is incorrectly waiting for a player IP");
+
+if (guest.Bootstrap != "tcp://150.158.142.253:11010" || host.Bootstrap != guest.Bootstrap)
+    throw new Exception("Default node mismatch");
+var custom = Room.Create(game, "udp://[::1]:12345");
+var customGuest = Room.Parse(game, custom.Invite, "tcp://other.example:1122");
+if (customGuest.Bootstrap != custom.Bootstrap || customGuest.Network != custom.Network)
+    throw new Exception("Host bootstrap should win over guest settings");
+var legacy = $"GL1-{game.Id}-{host.Secret}";
+var oldRoom = Room.Parse(game, legacy, "tcp://legacy.example:11010");
+var legacyNetwork = "gl-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+    System.Text.Encoding.ASCII.GetBytes(legacy)))[..24];
+if (oldRoom.Bootstrap != "tcp://legacy.example:11010" || oldRoom.Network != legacyNetwork ||
+    Room.Parse(game, oldRoom.Invite).Network != legacyNetwork)
+    throw new Exception("Legacy join or reshare failed");
+foreach (var invalid in new[] { "", "http://example.org:80", "tcp://example.org:0",
+    "tcp://example.org:12345/path", "tcp://u:p@example.org:12", "tcp://example.org:99999" })
+{
+    try { Room.Parse(game, $"GL2-{game.Id}-{host.Secret}|{invalid}"); }
+    catch (FormatException) { continue; }
+    throw new Exception("Malformed invite endpoint accepted");
+}
+Console.WriteLine("Default, custom, legacy and invalid bootstrap invitation checks passed.");

@@ -7,7 +7,7 @@ internal sealed class Lobby : Form
     private readonly SessionLog log = new(Path.Combine(Environment.GetFolderPath(
         Environment.SpecialFolder.LocalApplicationData), "EasyTierGameLobby", "Logs"));
     private readonly Tunnel tunnel;
-    private readonly TextBox bootstrap = new() { Dock = DockStyle.Top, PlaceholderText = "可选：自定义引导节点（双方使用同一地址），默认使用官方节点" };
+    private readonly TextBox bootstrap = new() { Dock = DockStyle.Top, PlaceholderText = "可选：房主自定义引导节点。留空使用 DreamLife，加入时自动跟随新邀请码" };
     private readonly Button export = ActionButton("导出日志");
     private string lastReport = "";
     private readonly ComboBox games = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 280 };
@@ -96,10 +96,10 @@ internal sealed class Lobby : Form
         try
         {
             var game = (GameProfile)games.SelectedItem!;
-            var room = hosting ? Room.Create(game) : Room.Parse(game, invite.Text);
+            var room = hosting ? Room.Create(game, bootstrap.Text) : Room.Parse(game, invite.Text, bootstrap.Text);
             log.Write($"{(hosting ? "创建" : "加入")} {game.Id} 房间标识 {room.Network}；请求开启 UDP 广播中继");
             lastReport = "";
-            tunnel.Start(room, bootstrap.Text, hosting);
+            tunnel.Start(room, hosting);
             generation++;
             invite.Text = room.Invite;
             SetActive(true);

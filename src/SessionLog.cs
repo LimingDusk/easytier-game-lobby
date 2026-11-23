@@ -9,7 +9,7 @@ internal sealed class SessionLog
     private readonly object gate = new();
     private readonly string path;
     private long bytes;
-    internal const string Version = "0.1.0-alpha.4";
+    internal const string Version = "0.1.0-alpha.5";
     public string? DiskError { get; private set; }
 
     public SessionLog(string folder)
@@ -28,8 +28,8 @@ internal sealed class SessionLog
 
     public void Write(string value)
     {
-        // Invitations and raw room secrets use the same 32-hex token across GL1 rooms.
-        var clean = Regex.Replace(value, @"(?i)(GL1-[A-Z0-9]+-)?[0-9A-F]{32}", "[已隐藏]");
+        // Invitations and raw room secrets use the same 32-hex token across room formats.
+        var clean = Regex.Replace(value, @"(?i)GL2-[A-Z0-9]+-[0-9A-F]{32}\|\S+|(GL1-[A-Z0-9]+-)?[0-9A-F]{32}", "[已隐藏]");
         clean = clean.Replace("\r", "").Replace("\n", " | ");
         var line = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz}  {clean[..Math.Min(clean.Length, 2400)]}";
         lock (gate)

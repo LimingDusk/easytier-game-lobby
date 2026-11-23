@@ -24,7 +24,7 @@ internal sealed class Tunnel(SessionLog log) : IDisposable
         return info;
     }
 
-    public void Start(Room room, string bootstrap, bool hosting)
+    public void Start(Room room, bool hosting)
     {
         if (Running) throw new InvalidOperationException("请先离开当前房间。");
         Stop();
@@ -33,16 +33,7 @@ internal sealed class Tunnel(SessionLog log) : IDisposable
             probe.Start();
             portal = probe.LocalEndpoint.ToString()!;
         }
-        string[] servers;
-        if (string.IsNullOrWhiteSpace(bootstrap))
-            servers = ["tcp://public.easytier.cn:11010", "tcp://public.easytier.top:11010"];
-        else if (Uri.TryCreate(bootstrap.Trim(), UriKind.Absolute, out var uri) &&
-                 uri.Scheme is "tcp" or "udp" && uri.Host.Length > 0 && uri.Port > 0 &&
-                 uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0 &&
-                 uri.AbsolutePath is "" or "/")
-            servers = [bootstrap.Trim()];
-        else throw new FormatException("引导地址格式应为 tcp://主机:端口 或 udp://主机:端口。");
-        log.Write("引导节点 " + string.Join("  ", servers));
+        log.Write("引导节点 " + room.Bootstrap);
         var address = hosting ? HostNetwork.Choose() : null;
         var info = Tool("easytier-core.exe", "--network-name", room.Network,
             "--rpc-portal", portal, "--console-log-level", "warn", "--dhcp", hosting ? "false" : "true");
@@ -53,7 +44,7 @@ internal sealed class Tunnel(SessionLog log) : IDisposable
             log.Write($"房主虚拟网卡申请地址 {address}/24");
         }
         info.ArgumentList.Add("--peers");
-        foreach (var server in servers) info.ArgumentList.Add(server);
+        info.ArgumentList.Add(room.Bootstrap);
         info.Environment["ET_NETWORK_SECRET"] = room.Secret;
         if (room.Game.RelayBroadcast) info.ArgumentList.Add("--enable-udp-broadcast-relay");
         info.RedirectStandardOutput = info.RedirectStandardError = true;
