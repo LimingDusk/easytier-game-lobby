@@ -5,9 +5,13 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <ApplicationIcon>Assets/GameLobby.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>GameLobby</AssemblyName>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets/GameLobby.ico" LogicalName="GameLobby.GameLobby.ico" />
+  </ItemGroup>
   <ItemGroup Condition="'$(EngineArchive)' != ''">
     <EmbeddedResource Include="$(EngineArchive)" LogicalName="GameLobby.EasyTier.zip" />
   </ItemGroup>

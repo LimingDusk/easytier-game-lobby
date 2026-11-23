@@ -74,15 +74,13 @@ internal sealed partial class Lobby
         ClientSize = new Size(926, 600);
         MinimumSize = new Size(720, 510);
 
+        Icon = new Icon(typeof(Lobby), "GameLobby.ico");
         var root = Stack(Canvas);
         Controls.Add(root);
-        var mast = new MapHeader { Dock = DockStyle.Top, Height = 92, Margin = Padding.Empty };
-        var title = Heading("局域网联机大厅", 23);
-        title.ForeColor = Color.White;
-        title.BackColor = Color.Transparent;
-        title.Location = new Point(25, 23);
-        mast.Controls.Add(title);
-        Row(root, mast);
+        mast = new MapHeader { Dock = DockStyle.Top, Size = new Size(ClientSize.Width, 92),
+            Margin = Padding.Empty, AccessibleName = "局域网联机大厅", Font = new Font(Font.FontFamily, 23, FontStyle.Bold) };
+        Controls.Add(mast);
+        AddWindowButtons(mast);
 
         var pages = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20, 18, 20, 12), Margin = Padding.Empty };
         Row(root, pages, true);
@@ -204,13 +202,34 @@ internal sealed partial class Lobby
     {
         public MapHeader() { BackColor = Ink; DoubleBuffered = true; ResizeRedraw = true; }
 
+        public bool IsDragSurface(IntPtr packedPoint)
+        {
+            long xy = packedPoint.ToInt64();
+            var local = PointToClient(new Point((short)xy, (short)(xy >> 16)));
+            return ClientRectangle.Contains(local) && GetChildAtPoint(local) == null;
+        }
+
+        // Let Windows hit-test the form underneath the painted header. The three
+        // child buttons keep their normal client hit tests and keyboard behavior.
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WmNcHitTest && IsDragSurface(m.LParam)) { m.Result = -1; return; } // HTTRANSPARENT
+            base.WndProc(ref m);
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             float u = DeviceDpi / 96f;
-            g.TranslateTransform(Width - 300 * u, 0);
+            if (FindForm()?.Icon is { } icon)
+                g.DrawIcon(icon, Rectangle.Round(new RectangleF(20*u, 27*u, 38*u, 38*u)));
+            TextRenderer.DrawText(g, AccessibleName, Font,
+                Rectangle.Round(new RectangleF(66*u, 0, 300*u, Height)), Color.White,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+
+            g.TranslateTransform(Width - 429 * u, 0);
             g.ScaleTransform(u, u);
             using var grid = new Pen(Color.FromArgb(57, 91, 105), 1);
             for (int col = 0; col < 9; col++)
