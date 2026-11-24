@@ -28,10 +28,13 @@ internal sealed class SessionLog
         Write($"启动 GameLobby {Version} / EasyTier 2.6.4 / {Environment.OSVersion}");
     }
 
+    // Invitations and raw room secrets use the same 32-hex token across room formats.
+    internal static string Redact(string value) =>
+        Regex.Replace(value, @"(?i)GL2-[A-Z0-9]+-[0-9A-F]{32}\|\S+|(GL1-[A-Z0-9]+-)?[0-9A-F]{32}", "[已隐藏]");
+
     public void Write(string value)
     {
-        // Invitations and raw room secrets use the same 32-hex token across room formats.
-        var clean = Regex.Replace(value, @"(?i)GL2-[A-Z0-9]+-[0-9A-F]{32}\|\S+|(GL1-[A-Z0-9]+-)?[0-9A-F]{32}", "[已隐藏]");
+        var clean = Redact(value);
         clean = clean.Replace("\r", "").Replace("\n", " | ");
         var line = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz}  {clean[..Math.Min(clean.Length, 2400)]}";
         lock (gate)

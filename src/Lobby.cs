@@ -31,8 +31,8 @@ public partial class Lobby : Window
         InitializeAppearance();
         gameName.Text = selectedGame.Name;
         games.Click += (_, _) => OpenGames();
-        host.Click += (_, _) => StartRoom(true);
-        join.Click += (_, _) => StartRoom(false);
+        host.Click += (_, _) => _ = RunActionAsync(() => StartRoomAsync(true), "创建房间失败");
+        join.Click += (_, _) => _ = RunActionAsync(() => StartRoomAsync(false), "加入房间失败");
         leave.Click += (_, _) => EndRoom("已离开房间");
         eye.Click += (_, _) => { revealed = !revealed; ShowInvite(); };
         copy.Click += (_, _) =>
@@ -45,12 +45,8 @@ public partial class Lobby : Window
         joinInvite.IsKeyboardFocusWithinChanged += (_, _) => UpdateInviteHint();
         bootstrapHint.Text = Room.DefaultBootstrap;
         bootstrap.TextChanged += (_, _) => bootstrapHint.Visibility = Visible(bootstrap.Text.Length == 0);
-        inspect.Click += async (_, _) => await RefreshPeers();
-        togglePage.Click += async (_, _) =>
-        {
-            SwitchPage(!diagnosticsOpen);
-            if (diagnosticsOpen && timer.IsEnabled) await RefreshDiagnostics();
-        };
+        inspect.Click += (_, _) => _ = RunActionAsync(RefreshPeers, "刷新失败");
+        togglePage.Click += (_, _) => _ = RunActionAsync(TogglePageAsync, "切换页面失败");
         minimize.Click += (_, _) => SystemCommands.MinimizeWindow(this);
         maximize.Click += (_, _) =>
         {
@@ -64,13 +60,9 @@ public partial class Lobby : Window
             frame.Margin = WindowState == WindowState.Maximized ? SystemParameters.WindowResizeBorderThickness : new Thickness(0);
         };
         export.Click += (_, _) => ExportLog();
-        timer.Tick += async (_, _) =>
-        {
-            if (tunnel.ExitCode is int code) EndRoom($"EasyTier 已退出（{code}）。请检查内核文件和虚拟网卡后重试。");
-            else if (tunnel.Running) await RefreshRoom();
-        };
+        timer.Tick += (_, _) => _ = RunActionAsync(RefreshRoom, "刷新失败");
         Closing += OnClosing;
-        Closed += (_, _) => { generation++; timer.Stop(); tunnel.Dispose(); log.Write("关闭大厅"); };
+        Closed += (_, _) => { generation++; timer.Stop(); log.Write("关闭大厅"); };
         SetRoom(null);
         ResetMembers();
         status.Text = "未加入房间";
@@ -80,7 +72,11 @@ public partial class Lobby : Window
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
-        if (!starting) return;
+        if (!starting)
+        {
+            e.Cancel = !TryStopTunnel();
+            return;
+        }
         closeAfterStart = true;
         e.Cancel = true;
         status.Text = "正在完成准备并关闭大厅…";
@@ -196,7 +192,7 @@ public partial class Lobby : Window
             (captured.Text, forwarded.Text, failed.Text) = (counts.Captured, counts.Forwarded, counts.Failed);
     }
 
-    private async void StartRoom(bool hosting)
+    private async Task StartRoomAsync(bool hosting)
     {
         if (starting || timer.IsEnabled) return;
         starting = true;
@@ -207,7 +203,7 @@ public partial class Lobby : Window
             var room = hosting ? Room.Create(game, bootstrap.Text) : Room.Parse(game, joinInvite.Password, bootstrap.Text);
             log.Write($"{(hosting ? "创建" : "加入")} {game.Id} 房间标识 {room.Network}；请求开启 UDP 广播中继");
             status.Text = "正在准备联机引擎…";
-            await Task.Run(() => tunnel.Start(room, hosting));
+            await Task.Run(() => tunnel.StartAsync(room, hosting));
             if (closeAfterStart) return;
             lastPeerReport = "";
             nextDiagnostics = 0;
@@ -221,8 +217,7 @@ public partial class Lobby : Window
         catch (Exception error)
         {
             SetRoom(null);
-            status.Text = error.Message;
-            log.Write("启动失败 " + error.Message);
+            ReportFailure("启动失败", error);
         }
         finally
         {
@@ -230,11 +225,45 @@ public partial class Lobby : Window
             host.IsEnabled = join.IsEnabled = joinInvite.IsEnabled = true;
             if (closeAfterStart) Close();
         }
-        if (!closeAfterStart && timer.IsEnabled) await RefreshRoom();
+        if (closeAfterStart || !timer.IsEnabled) return;
+        _ = RunActionAsync(WatchCoreExitAsync, "读取内核退出状态失败");
+        await RunActionAsync(RefreshRoom, "刷新失败");
+    }
+
+    private async Task WatchCoreExitAsync()
+    {
+        int current = generation;
+        int code = await tunnel.Exited;
+        if (current == generation)
+            EndRoom($"EasyTier 已退出（{code}）。请检查内核文件和虚拟网卡后重试。");
+    }
+
+    private async Task TogglePageAsync()
+    {
+        SwitchPage(!diagnosticsOpen);
+        if (diagnosticsOpen && timer.IsEnabled) await RefreshDiagnostics();
+    }
+
+    private async Task RunActionAsync(Func<Task> action, string failure)
+    {
+        int current = generation;
+        try { await action(); }
+        catch (Exception error)
+        {
+            if (current == generation) ReportFailure(failure, error);
+        }
+    }
+
+    private void ReportFailure(string context, Exception error)
+    {
+        string message = $"{context}：{SessionLog.Redact(error.Message)}";
+        status.Text = message;
+        log.Write(message);
     }
 
     private Task RefreshRoom()
     {
+        if (!timer.IsEnabled) return Task.CompletedTask;
         var peersTask = RefreshPeers();
         return diagnosticsOpen || Environment.TickCount64 >= nextDiagnostics
             ? Task.WhenAll(peersTask, RefreshDiagnostics())
@@ -244,7 +273,7 @@ public partial class Lobby : Window
     private async Task<string> Fetch(string command, Func<string, string> render)
     {
         try { return render(await tunnel.Query(command)); }
-        catch (Exception error) { return $"查询失败（{command}） {error.Message}"; }
+        catch (Exception error) { return $"查询失败（{command}） {SessionLog.Redact(error.Message)}"; }
     }
 
     private async Task RefreshPeers()
@@ -287,7 +316,7 @@ public partial class Lobby : Window
         }
         finally
         {
-            if (current == generation) { inspecting = false; inspect.IsEnabled = tunnel.Running; }
+            if (current == generation) { inspecting = false; inspect.IsEnabled = timer.IsEnabled; }
         }
     }
 
@@ -329,12 +358,22 @@ public partial class Lobby : Window
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { status.Text = e.Message; }
     }
 
+    private bool TryStopTunnel()
+    {
+        try { tunnel.Stop(); return true; }
+        catch (Exception error) when (error is Win32Exception or InvalidOperationException or AggregateException)
+        {
+            ReportFailure("无法停止联机内核", error);
+            return false;
+        }
+    }
+
     private void EndRoom(string message)
     {
+        if (!TryStopTunnel()) return;
         generation++;
         timer.Stop();
         log.Write(message);
-        tunnel.Stop();
         inspecting = readingDiagnostics = false;
         SetRoom(null);
         ResetMembers();

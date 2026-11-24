@@ -8,6 +8,7 @@
     <ApplicationIcon>Assets/GameLobby.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Version>0.2.0-alpha.4</Version>
+    <EngineArchiveSha256>27af91e270e554709b048bd32327fefd2dfce5062ae1e8701af7550c6f525f84</EngineArchiveSha256>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <AssemblyName>GameLobby</AssemblyName>
   </PropertyGroup>
@@ -27,11 +28,12 @@
     <!-- Changing between the preview and bundled builds must invalidate the compiler cache. -->
     <CoreCompileCache Include="$(EngineArchive)" />
     <EmbeddedResource Include="$(EngineArchive)" LogicalName="GameLobby.EasyTier.zip" />
+    <AssemblyMetadata Include="EngineArchiveSha256" Value="$(EngineArchiveSha256)" />
   </ItemGroup>
   <Target Name="VerifyEngineArchive" BeforeTargets="PrepareForBuild" Condition="'$(EngineArchive)' != ''">
     <GetFileHash Files="$(EngineArchive)" Algorithm="SHA256">
       <Output TaskParameter="Hash" PropertyName="EngineHash" />
     </GetFileHash>
-    <Error Condition="'$(EngineHash)' != '27af91e270e554709b048bd32327fefd2dfce5062ae1e8701af7550c6f525f84'" Text="Unexpected EasyTier archive digest." />
+    <Error Condition="'$(EngineHash)' != '$(EngineArchiveSha256)'" Text="Unexpected EasyTier archive digest." />
   </Target>
 </Project>

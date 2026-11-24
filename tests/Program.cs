@@ -15,6 +15,22 @@ foreach (string bad in new[] { "", host.Invite + "|extra", host.Invite.Replace("
     throw new Exception("Accepted an invalid invitation.");
 }
 Console.WriteLine("Room checks passed.");
+
+const string archiveDigest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+using (var payload = new MemoryStream("abc"u8.ToArray()))
+{
+    EngineBundle.VerifyArchive(payload, archiveDigest);
+    if (payload.Position != 0) throw new Exception("Verified archive was not rewound for extraction.");
+}
+using (var payload = new MemoryStream("abd"u8.ToArray()))
+{
+    bool rejected = false;
+    try { EngineBundle.VerifyArchive(payload, archiveDigest); }
+    catch (InvalidDataException) { rejected = true; }
+    if (!rejected) throw new Exception("Unexpected archive was accepted.");
+}
+Console.WriteLine("Engine archive integrity checks passed.");
+
 var localOnly = """[{"hostname":"self","cost":"Local","ipv4":"10.0.0.1"},{"hostname":"PublicServer_test","cost":"p2p","ipv4":""}]""";
 if (!NetworkReport.Peers(localOnly).Contains("尚未发现队友") ||
     !NetworkReport.Peers("[]").Contains("尚未返回本机")) throw new Exception("Waiting state missing");
@@ -38,9 +54,11 @@ try
 {
     var log = new SessionLog(folder.FullName);
     Parallel.For(0, 8, i => log.Write($"检查 {i} {host.Invite} {host.Secret.ToLowerInvariant()}"));
+    log.Write($"network secret mismatch: value={host.Secret.ToLowerInvariant()}suffix");
     var snapshot = log.Snapshot();
     var saved = File.ReadAllText(folder.GetFiles().Single().FullName);
     if (log.DiskError != null || !snapshot.Contains("[已隐藏]") || !saved.Contains("检查 7") ||
+        !saved.Contains("network secret mismatch: value=[已隐藏]suffix") ||
         saved.Contains(host.Secret, StringComparison.OrdinalIgnoreCase) ||
         snapshot.Contains(host.Secret, StringComparison.OrdinalIgnoreCase))
         throw new Exception("Session log persistence or secret redaction failed");

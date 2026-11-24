@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Reflection;
+using System.Security.Cryptography;
 
 namespace GameLobby;
 
@@ -6,9 +8,14 @@ internal static class EngineBundle
 {
     public static string Locate()
     {
-        using var payload = typeof(EngineBundle).Assembly.GetManifestResourceStream("GameLobby.EasyTier.zip");
+        var assembly = typeof(EngineBundle).Assembly;
+        using var payload = assembly.GetManifestResourceStream("GameLobby.EasyTier.zip");
         if (payload is null) // Developer builds can use a separately installed engine.
             return Path.Combine(AppContext.BaseDirectory, "engine");
+
+        string? expected = assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .SingleOrDefault(entry => entry.Key == "EngineArchiveSha256")?.Value;
+        VerifyArchive(payload, expected);
 
         var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             "EasyTierGameLobby", "engines");
@@ -32,6 +39,14 @@ internal static class EngineBundle
             }
         }
         return FindTools(target);
+    }
+
+    internal static void VerifyArchive(Stream payload, string? expected)
+    {
+        string actual = Convert.ToHexString(SHA256.HashData(payload));
+        if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("内嵌 EasyTier 压缩包未通过 SHA-256 校验，请重新下载联机大厅。");
+        payload.Position = 0;
     }
 
     private static string FindTools(string folder)
