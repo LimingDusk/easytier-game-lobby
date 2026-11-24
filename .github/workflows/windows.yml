@@ -15,7 +15,11 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet run --project tests/RoomChecks.csproj
-      - run: dotnet run --project tests/window/WindowChecks.csproj
+      - run: dotnet run --project tests/window/WindowChecks.csproj -- previews
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GameLobby-WPF-previews
+          path: previews/*.png
       - name: Build standalone launcher
         shell: pwsh
         run: |

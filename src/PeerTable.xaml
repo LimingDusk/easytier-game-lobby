@@ -1,0 +1,53 @@
+<UserControl x:Class="GameLobby.PeerTable" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Focusable="False">
+    <DataGrid x:Name="table" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False"
+              CanUserReorderColumns="False" CanUserSortColumns="False" CanUserResizeRows="False" HeadersVisibility="Column"
+              BorderThickness="0" Background="{DynamicResource Surface}" Foreground="{DynamicResource Ink}"
+              RowBackground="{DynamicResource Surface}" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource Rule}"
+              RowHeight="40" ColumnHeaderHeight="30" SelectionMode="Single" SelectionUnit="FullRow"
+              ScrollViewer.HorizontalScrollBarVisibility="Disabled" EnableRowVirtualization="True">
+        <DataGrid.Resources>
+            <Style TargetType="DataGridColumnHeader">
+                <Setter Property="Background" Value="{DynamicResource Field}"/><Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+                <Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="18,0"/>
+                <Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <Style TargetType="DataGridCell">
+                <Setter Property="BorderThickness" Value="0"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Style.Triggers><Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Tint}"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+                </Trigger></Style.Triggers>
+            </Style>
+            <Style x:Key="CellText" TargetType="TextBlock">
+                <Setter Property="Margin" Value="18,0"/><Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+        </DataGrid.Resources>
+        <DataGrid.Columns>
+            <DataGridTemplateColumn Header="设备" Width="46*"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+                <DockPanel Margin="18,0">
+                    <Border Width="28" Height="28" Margin="0,0,12,0" CornerRadius="7" Background="{DynamicResource Tint}" Visibility="{Binding Badge}">
+                        <TextBlock Text="{Binding Initial}" Foreground="{DynamicResource Accent}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                </DockPanel>
+            </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="虚拟 IP" Width="32*"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+                <TextBlock Text="{Binding Address}" Style="{StaticResource CellText}" FontFamily="Consolas, Microsoft YaHei UI" Foreground="{DynamicResource Muted}"/>
+            </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn x:Name="routeColumn" Header="连接" Width="22*"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+                <StackPanel Orientation="Horizontal" Margin="18,0">
+                    <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="{Binding Badge}">
+                        <Ellipse.Style><Style TargetType="Ellipse"><Setter Property="Fill" Value="{DynamicResource Accent}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Route}" Value="本机"><Setter Property="Fill" Value="{DynamicResource Muted}"/></DataTrigger>
+                                <DataTrigger Binding="{Binding Route}" Value="直连"><Setter Property="Fill" Value="{DynamicResource Green}"/></DataTrigger>
+                            </Style.Triggers>
+                        </Style></Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock Text="{Binding Route}" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+        </DataGrid.Columns>
+    </DataGrid>
+</UserControl>

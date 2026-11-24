@@ -62,13 +62,21 @@ internal static class NetworkReport
     public static BroadcastCounts? ReadBroadcast(string json)
     {
         using var doc = JsonDocument.Parse(json);
-        var counts = new Dictionary<string, string>();
-        foreach (var row in doc.RootElement.EnumerateArray())
-            counts[Field(row, "name")] = Field(row, "value");
         const string prefix = "udp_broadcast_relay_packets_";
-        if (!counts.Keys.Any(k => k.StartsWith(prefix, StringComparison.Ordinal)))
-            return null;
-        string Count(string suffix) => counts.GetValueOrDefault(prefix + suffix, "—");
-        return new BroadcastCounts(Count("captured"), Count("forwarded"), Count("forward_failed"));
+        string captured = "—", forwarded = "—", failed = "—";
+        bool available = false;
+        foreach (var row in doc.RootElement.EnumerateArray())
+        {
+            string name = Field(row, "name");
+            if (!name.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            available = true;
+            switch (name)
+            {
+                case prefix + "captured": captured = Field(row, "value"); break;
+                case prefix + "forwarded": forwarded = Field(row, "value"); break;
+                case prefix + "forward_failed": failed = Field(row, "value"); break;
+            }
+        }
+        return available ? new BroadcastCounts(captured, forwarded, failed) : null;
     }
 }

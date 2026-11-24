@@ -23,6 +23,10 @@ if (!NetworkReport.Peers(pair).Contains("已发现 1") || !NetworkReport.Peers(p
     throw new Exception("Remote peer missing");
 if (!NetworkReport.Broadcast("""[{"name":"udp_broadcast_relay_packets_forwarded","value":3}]""").Contains("转发 3"))
     throw new Exception("Missing broadcast metric");
+var partialStats = """[{"name":"unrelated","value":42},{"name":"udp_broadcast_relay_packets_forwarded","value":0},{"name":"udp_broadcast_relay_packets_forwarded","value":7}]""";
+if (NetworkReport.ReadBroadcast(partialStats) != new NetworkReport.BroadcastCounts("—", "7", "—") ||
+    NetworkReport.ReadBroadcast("""[{"name":"unrelated","value":42}]""") != null)
+    throw new Exception("Partial or absent broadcast counters are reported incorrectly.");
 if (args.Length == 3) // Accept captured v2.6.4 results during integration checks.
 {
     Console.WriteLine(NetworkReport.Peers(File.ReadAllText(args[0])));

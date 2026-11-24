@@ -2,17 +2,27 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationIcon>Assets/GameLobby.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.2.0-alpha.2</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <AssemblyName>GameLobby</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Assets/LobbyIcons.png" LogicalName="GameLobby.LobbyIcons.png" />
-    <EmbeddedResource Include="Assets/GameLobby.ico" LogicalName="GameLobby.GameLobby.ico" />
+    <Resource Include="Assets/GameLobby.ico" />
+    <Using Include="System.IO" />
+    <InternalsVisibleTo Include="WindowChecks" />
+    <Compile Include="$(IntermediateOutputPath)SvgPaths.g.cs;$(IntermediateOutputPath)Brand.g.cs" />
   </ItemGroup>
+  <Target Name="GenerateSvgPaths" BeforeTargets="MarkupCompilePass1;CoreCompile"
+          Inputs="Assets/LobbyIcons.svg;Assets/GameLobby.svg;Assets/SvgPaths.xsl" Outputs="$(IntermediateOutputPath)SvgPaths.g.cs;$(IntermediateOutputPath)Brand.g.cs">
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <XslTransformation XmlInputPaths="Assets/LobbyIcons.svg;Assets/GameLobby.svg" XslInputPath="Assets/SvgPaths.xsl"
+                       OutputPaths="$(IntermediateOutputPath)SvgPaths.g.cs;$(IntermediateOutputPath)Brand.g.cs" />
+  </Target>
   <ItemGroup Condition="'$(EngineArchive)' != ''">
     <EmbeddedResource Include="$(EngineArchive)" LogicalName="GameLobby.EasyTier.zip" />
   </ItemGroup>

@@ -6,7 +6,8 @@ namespace GameLobby;
 
 internal sealed class Tunnel(SessionLog log) : IDisposable
 {
-    private readonly Lazy<string> engineDirectory = new(EngineBundle.Locate);
+    private static readonly string[] LogTopics = ["broadcast", "WinDivert", "error", "failed", "conflict", "timeout", "panic"];
+    private string? engineDirectory;
     private Process? core;
     private string portal = "";
     public IPAddress? HostAddress { get; private set; }
@@ -15,7 +16,7 @@ internal sealed class Tunnel(SessionLog log) : IDisposable
 
     private ProcessStartInfo Tool(string file, params string[] args)
     {
-        string directory = engineDirectory.Value;
+        string directory = engineDirectory ??= EngineBundle.Locate();
         string path = Path.Combine(directory, file);
         if (!File.Exists(path))
             throw new FileNotFoundException("缺少 EasyTier 内核文件，请先运行 Install-Engine.cmd。");
@@ -70,9 +71,12 @@ internal sealed class Tunnel(SessionLog log) : IDisposable
     {
         var line = e.Data;
         if (string.IsNullOrWhiteSpace(line) || line.Contains("secret", StringComparison.OrdinalIgnoreCase)) return;
-        string[] topics = ["broadcast", "WinDivert", "error", "failed", "conflict", "timeout", "panic"];
-        if (topics.Any(word => line.Contains(word, StringComparison.OrdinalIgnoreCase)))
+        foreach (string topic in LogTopics)
+        {
+            if (!line.Contains(topic, StringComparison.OrdinalIgnoreCase)) continue;
             log.Write("内核 " + line);
+            break;
+        }
     }
 
     public async Task<string> Query(string command)

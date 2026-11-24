@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -9,7 +10,8 @@ internal sealed class SessionLog
     private readonly object gate = new();
     private readonly string path;
     private long bytes;
-    internal const string Version = "0.1.0-alpha.10";
+    internal static readonly string Version = typeof(SessionLog).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
     public string? DiskError { get; private set; }
 
     public SessionLog(string folder)

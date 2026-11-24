@@ -1,117 +1,122 @@
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using GameLobby;
+using GameLobby.Games;
 using Microsoft.Win32;
-using System.Reflection;
 
 internal static class WindowChecks
 {
-    // Runs on the Windows CI desktop; never changes the Windows theme.
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
-        ApplicationConfiguration.Initialize();
-        const string key = @"Software\EasyTierGameLobby";
-        using var preferences = Registry.CurrentUser.CreateSubKey(key);
-        var previous = preferences.GetValue("Appearance");
-        var type = Assembly.Load("GameLobby").GetType("GameLobby.Lobby", throwOnError: true)!;
-        Form Open()
-        {
-            var form = (Form)Activator.CreateInstance(type)!;
-            form.Show();
-            Application.DoEvents();
-            return form;
-        }
-
-        static T Field<T>(Form form, string name) where T : class =>
-            (T)form.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(form)!;
-
-        static void Input(Control control, string method, EventArgs args) =>
-            control.GetType().GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(control, [args]);
-
-        static void CheckTop(Form form)
-        {
-            var header = Field<Panel>(form, "mast");
-            if (header.PointToScreen(Point.Empty).Y != form.Bounds.Top)
-                throw new Exception("A non-client strip remains above the map header.");
-        }
-
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        using var preferences = Registry.CurrentUser.CreateSubKey(@"Software\EasyTierGameLobby");
+        var saved = preferences.GetValue("Appearance");
         try
         {
             preferences.DeleteValue("Appearance", false);
-            using (var form = Open())
+            var window = new Lobby();
+            window.Show();
+            void Layout()
             {
-                CheckTop(form);
-                var slider = Field<Control>(form, "appearance");
-                if (slider.AccessibilityObject.Value != "跟随系统") throw new Exception("First launch must follow Windows.");
-                void Mouse(string method, int x) => Input(slider, method,
-                    new MouseEventArgs(MouseButtons.Left, 1, x, slider.Height / 2, 0));
-                void Key(Keys key) => Input(slider, "OnKeyDown", new KeyEventArgs(key));
-                object? system = Registry.GetValue(
-                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-                    "AppsUseLightTheme", null);
-                bool systemDark = system is int i && i == 0;
-                bool Dark() => form.BackColor.GetBrightness() < 0.5f;
-                if (Dark() != systemDark) throw new Exception("Incorrect system appearance.");
-                Mouse("OnMouseDown", slider.Width / 2);
-                Mouse("OnMouseUp", slider.Width / 2);
-                if (slider.AccessibilityObject.Value != "浅色") throw new Exception("Click did not select light mode.");
-                if (Dark()) throw new Exception("Light mode not applied.");
-                Mouse("OnMouseDown", slider.Width / 2);
-                Mouse("OnMouseMove", slider.Width - 4);
-                if (Dark()) throw new Exception("A drag should commit on release.");
-                Mouse("OnMouseUp", slider.Width - 4);
-                if (!Dark()) throw new Exception("Dark mode not applied.");
-                Key(Keys.Home);
-                if (slider.AccessibilityObject.Value != "跟随系统" || Dark() != systemDark)
-                    throw new Exception("Keyboard selection did not restore system appearance.");
-                Key(Keys.Right);
-                Key(Keys.Right);
-                if (slider.AccessibilityObject.Value != "深色") throw new Exception("Arrow selection failed.");
-                form.Size = form.MinimumSize;
-                Application.DoEvents();
-                var diagnosticButton = Field<Button>(form, "diagnosticsToggle");
-                if (slider.Bounds.IntersectsWith(diagnosticButton.Bounds) || diagnosticButton.Right > slider.Parent!.ClientSize.Width)
-                    throw new Exception("Appearance selector or diagnostics button clipped at minimum size.");
-                if (Field<ListView>(form, "members").Visible)
-                    throw new Exception("An empty lobby should hide the member table.");
-                var games = Field<ComboBox>(form, "games");
-                if (!games.Visible || games.Items.Count == 0 || games.SelectedItem == null)
-                    throw new Exception("Game selector missing before joining a room.");
-                if (Field<Panel>(form,"mast").BackColor != slider.Parent.BackColor)
-                    throw new Exception("Title bar and footer must use the same background.");
-                var peerType = type.Assembly.GetType("GameLobby.NetworkReport", true)!;
-                var parse = peerType.GetMethod("ReadPeers")!;
-                var show = type.GetMethod("ShowMembers", BindingFlags.Instance | BindingFlags.NonPublic)!;
-                var roster = Field<ListView>(form,"members");
-                foreach (var count in new[] { 2, 12, 1, 0 })
-                {
-                    var rows = Enumerable.Range(0,count).Select(n => new {
-                        hostname = $"PC-{n}", cost = n == 0 ? "Local" : "p2p", ipv4 = $"10.0.0.{n+1}" })
-                        .Append(new { hostname = "PublicServer_test", cost = "p2p", ipv4 = "" });
-                    object? snapshot = parse.Invoke(null,[System.Text.Json.JsonSerializer.Serialize(rows)]);
-                    show.Invoke(form,[snapshot]);
-                    if (roster.Items.Count != count || roster.Visible != (count > 0) ||
-                        Field<Label>(form,"countBadge").Text != $"{count} 人")
-                        throw new Exception("Room member count and visible rows must track joins and departures.");
-                }
-                diagnosticButton.PerformClick();
-                if (Field<TextBox>(form, "peers").BackColor.GetBrightness() >= 0.5f)
-                    throw new Exception("Diagnostics did not adopt the dark palette.");
-                form.WindowState = FormWindowState.Maximized;
-                Application.DoEvents();
-                form.WindowState = FormWindowState.Normal;
-                Application.DoEvents();
-                CheckTop(form);
-                form.Close();
+                window.UpdateLayout();
+                window.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
             }
-            using var reopened = Open();
-            if (reopened.BackColor.GetBrightness() >= 0.5f)
-                throw new Exception("Manual appearance did not survive restart.");
+            void Capture(string name)
+            {
+                Layout();
+                if (args.Length == 0) return;
+                var element = window.frame;
+                var bitmap = new RenderTargetBitmap((int)Math.Ceiling(element.ActualWidth),
+                    (int)Math.Ceiling(element.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                var visual = new DrawingVisual();
+                using (var drawing = visual.RenderOpen())
+                {
+                    var bounds = new Rect(0, 0, element.ActualWidth, element.ActualHeight);
+                    drawing.DrawRectangle(window.Background, null, bounds);
+                    drawing.DrawRectangle(new VisualBrush(element), null, bounds);
+                }
+                bitmap.Render(visual);
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                Directory.CreateDirectory(args[0]);
+                using var output = File.Create(Path.Combine(args[0], name + ".png"));
+                encoder.Save(output);
+            }
+            void Roster(int count)
+            {
+                string[] names = ["Li", "Ming–PC", "Nova", "Atlas", "Kai", "Echo"];
+                var nodes = Enumerable.Range(0, count).Select(i => new NetworkReport.Member(
+                    i < names.Length ? names[i] : $"PC-{i+1}", $"10.126.126.{i+1}",
+                    i == 0 ? "Local" : i == 4 ? "relay(2)" : "p2p"))
+                    .Append(new("PublicServer_DreamLife", "", "p2p")).ToArray();
+                var snapshot = new NetworkReport.PeerState("", nodes);
+                window.ShowPeers(snapshot, snapshot.Details);
+                Layout();
+                Check(window.members.table.Items.Count == count && window.countBadge.Text == $"{count} 人", "Roster size");
+                Check(window.diagnosticNodes.table.Items.Count == count + 1, "Diagnostic roster");
+            }
+
+            Check(window.systemMode.IsChecked == true && window.emptyState.IsVisible, "Default theme and lobby");
+            var system = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", null);
+            Check(((SolidColorBrush)window.Background).Color.R == (system is 0 ? 0x14 : 0xf3), "System theme color");
+            window.lightMode.IsChecked = true;
+            Capture("01-empty-light");
+            var room = Room.Create(GameProfile.All[0]);
+            window.SetRoom(room, true);
+            window.status.Text = "每 4 秒刷新";
+            Check(!window.invite.Text.Contains(room.Secret) && !window.host.IsVisible && window.copy.IsVisible, "Private invitation");
+            window.eye.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.invite.Text == room.Invite, "Reveal");
+            window.eye.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Roster(6);
+            Capture("02-six-light");
+            window.darkMode.IsChecked = true;
+            Roster(2);
+            Capture("03-two-dark");
+            window.ShowDiagnostics("已连接　PublicServer_DreamLife", "", new("137", "28", "0"));
+            window.togglePage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.diagnosticsPage.IsVisible && window.broadcastGrid.IsVisible, "Diagnostics navigation");
+            Capture("04-diagnostics-dark");
+            window.togglePage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.Width = window.MinWidth;
+            window.Height = window.MinHeight;
+            foreach (int count in new[] { 20, 19, 20 }) Roster(count);
+            var table = window.members.table;
+            var scroll = FindScroll(table) ?? throw new InvalidOperationException("Missing roster viewport");
+            Check(scroll.ScrollableHeight > 0, "Scrollable roster at minimum size");
+            table.ScrollIntoView(table.Items[19]);
+            Layout();
+            Check(window.guideBar.IsVisible && window.togglePage.IsVisible && scroll.VerticalOffset > 0, "Fixed guide and footer");
+            window.SetRoom(null);
+            window.Close();
+            var reopened = new Lobby();
+            Check(reopened.darkMode.IsChecked == true, "Saved appearance");
             reopened.Close();
-            Console.WriteLine("Window frame, default appearance, switching and persistence passed.");
+            Console.WriteLine("WPF window, themes, invites, diagnostics and 20-member scrolling passed.");
         }
         finally
         {
-            if (previous is null) preferences.DeleteValue("Appearance", false);
-            else preferences.SetValue("Appearance", previous);
+            if (saved == null) preferences.DeleteValue("Appearance", false);
+            else preferences.SetValue("Appearance", saved);
+            app.Shutdown();
         }
+    }
+
+    private static ScrollViewer? FindScroll(DependencyObject parent)
+    {
+        if (parent is ScrollViewer viewer) return viewer;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            if (FindScroll(VisualTreeHelper.GetChild(parent, i)) is { } found) return found;
+        return null;
+    }
+
+    private static void Check(bool ok, string name)
+    {
+        if (!ok) throw new InvalidOperationException(name);
     }
 }
