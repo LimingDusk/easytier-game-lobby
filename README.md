@@ -6,6 +6,8 @@
 
 从 0.2.0-alpha.2 起，大厅使用 WPF 和 XAML 绘制窗口。SVG 动作图标在构建时生成 WPF 矢量路径；应用图标提供 16 到 256 像素的 ICO 图层。20 人房间的成员列表独立滚动。
 
+窗口外框跟随系统：Windows 10 使用直角，Windows 11 请求系统圆角，最大化与贴靠时由系统决定边缘外观。加入房间前，邀请码输入框会遮挡输入与粘贴的内容，获得焦点时隐藏提示文字。
+
 ## 玩家使用
 
 1. 双方从 [Releases](https://github.com/LimingDusk/easytier-game-lobby/releases) 下载 `GameLobby-win-x64.exe`。

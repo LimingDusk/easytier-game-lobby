@@ -1,6 +1,8 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Shell;
 using Microsoft.Win32;
 
 namespace GameLobby;
@@ -57,7 +59,32 @@ public partial class Lobby
             FocusMode();
             e.Handled = true;
         };
-        SourceInitialized += (_, _) => HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(ThemeChanged);
+        SourceInitialized += (_, _) =>
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            HwndSource.FromHwnd(hwnd)?.AddHook(ThemeChanged);
+            ApplySystemCorners(hwnd);
+        };
+    }
+
+    private static class Dwm
+    {
+        internal const int WindowCornerPreference = 33;
+        internal const int Round = 2;
+
+        [DllImport("dwmapi.dll", ExactSpelling = true)]
+        internal static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+    }
+
+    private void ApplySystemCorners(IntPtr hwnd)
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return;
+        int preference = Dwm.Round;
+        if (Dwm.DwmSetWindowAttribute(hwnd, Dwm.WindowCornerPreference, ref preference, sizeof(int)) < 0) return;
+
+        // A zero glass margin makes WindowChrome install a rectangular HWND region.
+        // Leave the outline to DWM so it can also handle maximize, snap and restore.
+        WindowChrome.GetWindowChrome(this).GlassFrameThickness = new Thickness(1);
     }
 
     private void FocusMode() => (mode switch
