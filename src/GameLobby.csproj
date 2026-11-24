@@ -24,6 +24,8 @@
                        OutputPaths="$(IntermediateOutputPath)SvgPaths.g.cs;$(IntermediateOutputPath)Brand.g.cs" />
   </Target>
   <ItemGroup Condition="'$(EngineArchive)' != ''">
+    <!-- Changing between the preview and bundled builds must invalidate the compiler cache. -->
+    <CoreCompileCache Include="$(EngineArchive)" />
     <EmbeddedResource Include="$(EngineArchive)" LogicalName="GameLobby.EasyTier.zip" />
   </ItemGroup>
   <Target Name="VerifyEngineArchive" BeforeTargets="PrepareForBuild" Condition="'$(EngineArchive)' != ''">
