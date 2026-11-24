@@ -48,8 +48,8 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
             <DockPanel LastChildFill="False">
-                <Button x:Name="games" Width="230" Height="46" HorizontalContentAlignment="Stretch" AutomationProperties.Name="切换游戏模块">
-                    <Grid Width="198">
+                <Button x:Name="games" Width="250" Height="46" HorizontalContentAlignment="Stretch" AutomationProperties.Name="切换游戏模块">
+                    <Grid Width="218">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>

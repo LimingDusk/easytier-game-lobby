@@ -14,6 +14,19 @@ foreach (string bad in new[] { "", host.Invite + "|extra", host.Invite.Replace("
     catch (FormatException) { continue; }
     throw new Exception("Accepted an invalid invitation.");
 }
+foreach (string id in new[] { "MCLAN", "CUSTOM" })
+{
+    var profile = GameProfile.All.Single(g => g.Id == id);
+    var moduleRoom = Room.Create(profile);
+    if (Room.Parse(profile, moduleRoom.Invite).Network != moduleRoom.Network)
+        throw new Exception($"Invite round trip failed for {id}.");
+    foreach (var other in GameProfile.All.Where(g => g != profile))
+    {
+        try { Room.Parse(other, moduleRoom.Invite); }
+        catch (FormatException) { continue; }
+        throw new Exception($"{other.Id} accepted an invitation for {id}.");
+    }
+}
 Console.WriteLine("Room checks passed.");
 
 const string archiveDigest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
