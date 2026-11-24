@@ -41,7 +41,7 @@ python tests/mesh_capacity.py --engine-dir PATH_TO_ENGINE --nodes 20 --relay
 
 ### 界面验收
 
-在 Windows 上运行 `dotnet run --project tests/window/WindowChecks.csproj -- previews`。检查程序使用样例房间数据生成空房浅色、六人浅色、双人深色、网络诊断四张实际 WPF 渲染图，并检查最小窗口下的 20 人滚动、邀请码显示和主题偏好。PNG 保存在指定目录；Windows build 工作流也会保存为 GameLobby-WPF-previews 构件。
+在 Windows 上运行 `dotnet run --project tests/window/WindowChecks.csproj -- previews`。检查程序使用样例房间数据生成空房浅色、六人浅色、双人深色、网络诊断四张实际 WPF 渲染图，并检查最小窗口下的 20 人滚动、邀请码显示和主题偏好。PNG 保存在指定目录。单文件截图工具直接双击会将四张 PNG 写入工具旁的 previews 文件夹；Windows build 工作流会将截图保存为 GameLobby-WPF-previews 构件。
 
 ## 上游
 

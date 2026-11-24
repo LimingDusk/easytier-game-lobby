@@ -126,8 +126,9 @@ public partial class Lobby : Window
         if (room != null)
         {
             guideTitle.Text = hosting ? "房主开房步骤" : "加入游戏步骤";
-            guide.Text = hosting ? room.Game.HostGuide : room.Game.GuestGuide;
-            guide.ToolTip = guide.Text;
+            string instructions = hosting ? room.Game.HostGuide : room.Game.GuestGuide;
+            guide.Text = (hosting ? room.Game.HostSteps : room.Game.GuestSteps) ?? instructions;
+            guide.ToolTip = instructions;
         }
         emptyTitle.Text = active ? "正在查询房间成员" : "等待加入房间";
         statusIcon.Kind = active ? "refresh" : "people";

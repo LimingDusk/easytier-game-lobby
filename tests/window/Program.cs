@@ -13,6 +13,7 @@ internal static class WindowChecks
     [STAThread]
     private static void Main(string[] args)
     {
+        string outputDirectory = args.Length == 0 ? Path.Combine(AppContext.BaseDirectory, "previews") : args[0];
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         using var preferences = Registry.CurrentUser.CreateSubKey(@"Software\EasyTierGameLobby");
         var saved = preferences.GetValue("Appearance");
@@ -29,7 +30,6 @@ internal static class WindowChecks
             void Capture(string name)
             {
                 Layout();
-                if (args.Length == 0) return;
                 var element = window.frame;
                 var bitmap = new RenderTargetBitmap((int)Math.Ceiling(element.ActualWidth),
                     (int)Math.Ceiling(element.ActualHeight), 96, 96, PixelFormats.Pbgra32);
@@ -43,8 +43,8 @@ internal static class WindowChecks
                 bitmap.Render(visual);
                 var encoder = new PngBitmapEncoder();
                 encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                Directory.CreateDirectory(args[0]);
-                using var output = File.Create(Path.Combine(args[0], name + ".png"));
+                Directory.CreateDirectory(outputDirectory);
+                using var output = File.Create(Path.Combine(outputDirectory, name + ".png"));
                 encoder.Save(output);
             }
             void Roster(int count)
@@ -97,6 +97,7 @@ internal static class WindowChecks
             var reopened = new Lobby();
             Check(reopened.darkMode.IsChecked == true, "Saved appearance");
             reopened.Close();
+            Console.WriteLine($"Screenshots saved to {Path.GetFullPath(outputDirectory)}");
             Console.WriteLine("WPF window, themes, invites, diagnostics and 20-member scrolling passed.");
         }
         finally
