@@ -47,30 +47,27 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-            <StackPanel>
-                <TextBlock Text="游戏模块" Style="{StaticResource Secondary}" FontWeight="SemiBold"/>
-                <DockPanel Margin="0,7,0,0" LastChildFill="False">
-                    <Button x:Name="games" Width="230" Height="46" HorizontalContentAlignment="Stretch" AutomationProperties.Name="切换游戏模块">
-                        <Grid Width="198">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <ui:Glyph Kind="game" Foreground="{DynamicResource Accent}"/>
-                            <TextBlock x:Name="gameName" Grid.Column="1" FontSize="20" Margin="14,0" FontWeight="SemiBold"/>
-                            <ui:Glyph Kind="chevron" Width="13" Height="13" Grid.Column="2"/>
-                        </Grid>
-                    </Button>
-                    <TextBlock x:Name="roomState" Text="●  未加入房间" Margin="24,0,0,0" Style="{StaticResource Secondary}" FontWeight="SemiBold"/>
-                    <Button x:Name="leave" DockPanel.Dock="Right" VerticalAlignment="Center" AutomationProperties.Name="离开房间" ToolTip="离开房间">
-                        <StackPanel Orientation="Horizontal">
-                            <ui:Glyph Kind="leave" Width="16" Height="16"/>
-                            <TextBlock Text="离开房间" Margin="7,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                </DockPanel>
-            </StackPanel>
+            <DockPanel LastChildFill="False">
+                <Button x:Name="games" Width="230" Height="46" HorizontalContentAlignment="Stretch" AutomationProperties.Name="切换游戏模块">
+                    <Grid Width="198">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ui:Glyph Kind="game" Foreground="{DynamicResource Accent}"/>
+                        <TextBlock x:Name="gameName" Grid.Column="1" FontSize="20" Margin="14,0" FontWeight="SemiBold"/>
+                        <ui:Glyph Kind="chevron" Width="13" Height="13" Grid.Column="2"/>
+                    </Grid>
+                </Button>
+                <TextBlock x:Name="roomState" Text="●  未加入房间" Margin="24,0,0,0" Style="{StaticResource Secondary}" FontWeight="SemiBold"/>
+                <Button x:Name="leave" DockPanel.Dock="Right" VerticalAlignment="Center" AutomationProperties.Name="离开房间" ToolTip="离开房间">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Glyph Kind="leave" Width="16" Height="16"/>
+                        <TextBlock Text="离开房间" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </DockPanel>
             <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,14,0,12" Padding="20,14">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -90,7 +87,8 @@
                                 </StackPanel>
                             </Button>
                             <Grid>
-                                <TextBox x:Name="invite" AutomationProperties.Name="房间邀请码" Height="38" FontSize="14"/>
+                                <PasswordBox x:Name="joinInvite" PasswordChar="●" AutomationProperties.Name="房间邀请码" Height="38" FontSize="14"/>
+                                <TextBox x:Name="invite" Visibility="Collapsed" IsReadOnly="True" IsUndoEnabled="False" AutomationProperties.Name="房间邀请码" Height="38" FontSize="14"/>
                                 <TextBlock x:Name="inviteHint" Text="粘贴好友发来的邀请码" IsHitTestVisible="False" Margin="12,0,0,0" Style="{StaticResource Secondary}"/>
                             </Grid>
                         </DockPanel>

@@ -43,11 +43,11 @@
         <Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
     </Style>
-    <Style TargetType="TextBox">
+    <Style x:Key="InputField" TargetType="Control">
         <Setter Property="Background" Value="{DynamicResource Field}"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/>
-        <Setter Property="CaretBrush" Value="{DynamicResource Ink}"/><Setter Property="Padding" Value="10,4"/>
+        <Setter Property="Padding" Value="10,4"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Control">
             <Border x:Name="field" CornerRadius="6" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" BorderThickness="1" BorderBrush="Transparent">
                 <ScrollViewer x:Name="PART_ContentHost"/>
             </Border>
@@ -55,6 +55,12 @@
                 <Setter TargetName="field" Property="BorderBrush" Value="{DynamicResource Accent}"/>
             </Trigger></ControlTemplate.Triggers>
         </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style TargetType="TextBox" BasedOn="{StaticResource InputField}">
+        <Setter Property="CaretBrush" Value="{DynamicResource Ink}"/>
+    </Style>
+    <Style TargetType="PasswordBox" BasedOn="{StaticResource InputField}">
+        <Setter Property="CaretBrush" Value="{DynamicResource Ink}"/>
     </Style>
     <Style x:Key="Mode" TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource Muted}"/>

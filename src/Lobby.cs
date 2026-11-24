@@ -41,7 +41,8 @@ public partial class Lobby : Window
             try { Clipboard.SetText(currentRoom.Invite); status.Text = "邀请码已复制，请发给一起游玩的好友。"; }
             catch (System.Runtime.InteropServices.ExternalException) { status.Text = "剪贴板正忙，可显示邀请码后手动复制。"; }
         };
-        invite.TextChanged += (_, _) => inviteHint.Visibility = Visible(currentRoom == null && invite.Text.Length == 0);
+        joinInvite.PasswordChanged += (_, _) => UpdateInviteHint();
+        joinInvite.IsKeyboardFocusWithinChanged += (_, _) => UpdateInviteHint();
         bootstrapHint.Text = Room.DefaultBootstrap;
         bootstrap.TextChanged += (_, _) => bootstrapHint.Visibility = Visible(bootstrap.Text.Length == 0);
         inspect.Click += async (_, _) => await RefreshPeers();
@@ -119,7 +120,9 @@ public partial class Lobby : Window
         host.Visibility = join.Visibility = Visible(!active);
         leave.Visibility = copy.Visibility = eye.Visibility = inspect.Visibility = guideBar.Visibility = Visible(active);
         inspect.IsEnabled = active && !inspecting;
-        invite.IsReadOnly = active;
+        invite.Visibility = Visible(active);
+        joinInvite.Visibility = Visible(!active);
+        if (active) joinInvite.Clear();
         revealed = false;
         ShowInvite();
         bootstrapHint.Text = room?.Bootstrap ?? Room.DefaultBootstrap;
@@ -135,10 +138,16 @@ public partial class Lobby : Window
         SetConnection(false);
     }
 
+    private void UpdateInviteHint()
+    {
+        using var password = joinInvite.SecurePassword;
+        inviteHint.Visibility = Visible(currentRoom == null && !joinInvite.IsKeyboardFocusWithin && password.Length == 0);
+    }
+
     private void ShowInvite()
     {
-        if (currentRoom != null) invite.Text = revealed ? currentRoom.Invite : "•••• •••• ••••";
-        inviteHint.Visibility = Visible(currentRoom == null && invite.Text.Length == 0);
+        invite.Text = currentRoom == null ? "" : revealed ? currentRoom.Invite : "•••• •••• ••••";
+        UpdateInviteHint();
         string label = revealed ? "隐藏邀请码" : "显示邀请码";
         eye.ToolTip = label;
         AutomationProperties.SetName(eye, label);
@@ -191,11 +200,11 @@ public partial class Lobby : Window
     {
         if (starting || timer.IsEnabled) return;
         starting = true;
-        host.IsEnabled = join.IsEnabled = bootstrap.IsEnabled = games.IsEnabled = invite.IsEnabled = false;
+        host.IsEnabled = join.IsEnabled = bootstrap.IsEnabled = games.IsEnabled = joinInvite.IsEnabled = false;
         try
         {
             var game = selectedGame;
-            var room = hosting ? Room.Create(game, bootstrap.Text) : Room.Parse(game, invite.Text, bootstrap.Text);
+            var room = hosting ? Room.Create(game, bootstrap.Text) : Room.Parse(game, joinInvite.Password, bootstrap.Text);
             log.Write($"{(hosting ? "创建" : "加入")} {game.Id} 房间标识 {room.Network}；请求开启 UDP 广播中继");
             status.Text = "正在准备联机引擎…";
             await Task.Run(() => tunnel.Start(room, hosting));
@@ -218,7 +227,7 @@ public partial class Lobby : Window
         finally
         {
             starting = false;
-            host.IsEnabled = join.IsEnabled = invite.IsEnabled = true;
+            host.IsEnabled = join.IsEnabled = joinInvite.IsEnabled = true;
             if (closeAfterStart) Close();
         }
         if (!closeAfterStart && timer.IsEnabled) await RefreshRoom();
@@ -328,7 +337,6 @@ public partial class Lobby : Window
         tunnel.Stop();
         inspecting = readingDiagnostics = false;
         SetRoom(null);
-        invite.Clear();
         ResetMembers();
         status.Text = message;
     }

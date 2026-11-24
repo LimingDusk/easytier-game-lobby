@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <ApplicationIcon>Assets/GameLobby.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.2.0-alpha.2</Version>
+    <Version>0.2.0-alpha.3</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <AssemblyName>GameLobby</AssemblyName>
   </PropertyGroup>

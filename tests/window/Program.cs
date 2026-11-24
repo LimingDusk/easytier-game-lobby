@@ -67,6 +67,15 @@ internal static class WindowChecks
             window.lightMode.IsChecked = true;
             Capture("01-empty-light");
             var room = Room.Create(GameProfile.All[0]);
+            window.joinInvite.Focus();
+            Layout();
+            Check(window.joinInvite.IsKeyboardFocused && !window.inviteHint.IsVisible, "Focused prompt is hidden");
+            window.joinInvite.Password = room.Invite;
+            window.join.Focus();
+            Check(!window.inviteHint.IsVisible && !window.invite.IsVisible &&
+                  Room.Parse(GameProfile.All[0], window.joinInvite.Password).Network == room.Network, "Masked invitation can join");
+            window.joinInvite.Clear();
+            Check(window.inviteHint.IsVisible, "Empty unfocused prompt");
             window.SetRoom(room, true);
             window.status.Text = "每 4 秒刷新";
             Check(!window.invite.Text.Contains(room.Secret) && !window.host.IsVisible && window.copy.IsVisible, "Private invitation");
