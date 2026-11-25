@@ -13,6 +13,11 @@ internal static class WindowChecks
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args is ["--update-package", var package])
+        {
+            UpdateWindowsChecks.RunAsync(package).GetAwaiter().GetResult();
+            return;
+        }
         string outputDirectory = args.Length == 0 ? Path.Combine(AppContext.BaseDirectory, "previews") : args[0];
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         using var preferences = Registry.CurrentUser.CreateSubKey(@"Software\EasyTierGameLobby");
@@ -20,7 +25,7 @@ internal static class WindowChecks
         try
         {
             preferences.DeleteValue("Appearance", false);
-            var window = new Lobby();
+            var window = UpdateWindowsChecks.CreatePreviewLobby();
             window.Show();
             void Layout()
             {
@@ -61,7 +66,9 @@ internal static class WindowChecks
                 Check(window.diagnosticNodes.table.Items.Count == count + 1, "Diagnostic roster");
             }
 
+            Layout();
             Check(window.systemMode.IsChecked == true && window.emptyState.IsVisible, "Default theme and lobby");
+            Check(window.githubButton.IsVisible && window.updateLabel.Text == "安装更新", "GitHub entry and startup update check");
             var system = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", null);
             Check(((SolidColorBrush)window.Background).Color.R == (system is 0 ? 0x14 : 0xf3), "System theme color");
             window.lightMode.IsChecked = true;
@@ -77,6 +84,8 @@ internal static class WindowChecks
             window.joinInvite.Clear();
             Check(window.inviteHint.IsVisible, "Empty unfocused prompt");
             window.SetRoom(room, true);
+            window.updateButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.status.Text == "离开房间后可以安装更新。", "An update cannot interrupt a room");
             window.status.Text = "每 4 秒刷新";
             Check(!window.invite.Text.Contains(room.Secret) && !window.host.IsVisible && window.copy.IsVisible, "Private invitation");
             window.eye.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -100,7 +109,9 @@ internal static class WindowChecks
             Check(scroll.ScrollableHeight > 0, "Scrollable roster at minimum size");
             table.ScrollIntoView(table.Items[19]);
             Layout();
-            Check(window.guideBar.IsVisible && window.togglePage.IsVisible && scroll.VerticalOffset > 0, "Fixed guide and footer");
+            Check(window.guideBar.IsVisible && window.togglePage.IsVisible && window.githubButton.IsVisible &&
+                  window.updateButton.IsVisible && window.status.ActualWidth >= 80 && scroll.VerticalOffset > 0,
+                  "Fixed guide and footer at minimum size");
             window.SetRoom(null);
             window.Close();
             var reopened = new Lobby();

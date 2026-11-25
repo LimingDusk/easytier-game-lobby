@@ -8,6 +8,8 @@
 2. 选择同一个游戏模块。房主点「创建房间」，复制邀请码私发给好友。好友粘贴邀请码后点「加入房间」。
 3. 点「刷新节点」，在「房间成员」查看虚拟 IP 和连接方式，再进入游戏。联机期间保持大厅运行，结束后点「离开房间」。
 
+大厅启动时会检查更新。发现新版本后，离开房间再点「安装更新」。大厅会下载、校验并重启，之后从原位置启动也会打开新版。底部的「GitHub」可打开项目仓库。
+
 ## 游戏内联机
 
 - 在 **《文明 VI》** 中，双方进入「多人游戏 → 本地网络」，房主创建对局，好友选中加入。跨网搜房和回合推进已通过双机实测。
@@ -30,6 +32,7 @@
 ```powershell
 dotnet build src/GameLobby.csproj
 dotnet run --project tests/RoomChecks.csproj
+dotnet run --project tests/updates/UpdateChecks.csproj
 dotnet run --project tests/window/WindowChecks.csproj -- previews
 ```
 

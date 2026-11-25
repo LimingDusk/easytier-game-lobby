@@ -231,6 +231,20 @@
         <Border Grid.Row="2" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Rule}" Padding="30,0">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="updateButton" Style="{StaticResource Quiet}" VerticalAlignment="Center"
+                            AutomationProperties.Name="检查更新" ToolTip="检查更新">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:Glyph Kind="refresh" Width="16" Height="16"/>
+                            <TextBlock x:Name="updateLabel" Text="检查更新" Margin="8,0,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="githubButton" Style="{StaticResource Quiet}" VerticalAlignment="Center"
+                            Margin="0,0,12,0" AutomationProperties.Name="打开 GitHub 仓库" ToolTip="打开 GitHub 仓库">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:Glyph Kind="link" Width="16" Height="16"/>
+                            <TextBlock Text="GitHub" Margin="8,0,0,0"/>
+                        </StackPanel>
+                    </Button>
                     <Border CornerRadius="20" VerticalAlignment="Center" Background="{DynamicResource Field}" BorderBrush="{DynamicResource Edge}" BorderThickness="1" Padding="3">
                         <StackPanel x:Name="modeBar" Orientation="Horizontal">
                             <RadioButton x:Name="systemMode" Style="{StaticResource Mode}" GroupName="Appearance" ToolTip="跟随系统" AutomationProperties.Name="跟随系统">

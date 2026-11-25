@@ -24,11 +24,14 @@ public partial class Lobby : Window
     private long nextDiagnostics;
     private bool diagnosticsOpen => diagnosticsPage.Visibility == Visibility.Visible;
 
-    public Lobby()
+    public Lobby() : this(null) { }
+
+    internal Lobby(UpdateInstallation? installation, GitHubUpdates? source = null)
     {
         tunnel = new(log);
         InitializeComponent();
         InitializeAppearance();
+        InitializeUpdates(installation, source);
         gameName.Text = selectedGame.Name;
         games.Click += (_, _) => OpenGames();
         host.Click += (_, _) => _ = RunActionAsync(() => StartRoomAsync(true), "创建房间失败");
@@ -71,6 +74,11 @@ public partial class Lobby : Window
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
+        if (CancelUpdateForClose())
+        {
+            e.Cancel = true;
+            return;
+        }
         if (!starting)
         {
             e.Cancel = !TryStopTunnel();
@@ -192,7 +200,7 @@ public partial class Lobby : Window
 
     private async Task StartRoomAsync(bool hosting)
     {
-        if (starting || timer.IsEnabled) return;
+        if (starting || timer.IsEnabled || applyingUpdate) return;
         starting = true;
         host.IsEnabled = join.IsEnabled = bootstrap.IsEnabled = games.IsEnabled = joinInvite.IsEnabled = false;
         try
