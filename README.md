@@ -1,65 +1,54 @@
 # 游戏联机大厅
 
-用 EasyTier 把异地玩家的 Windows 电脑连进同一个虚拟网络，再通过游戏的局域网大厅或虚拟 IP 加入对局。首版面向 Windows 10/11 x64。《文明 VI》已完成实际跨网搜房和回合推进双机实测。
+用 EasyTier 把异地玩家的 Windows 电脑连进同一个虚拟网络，再通过游戏内的局域网列表或虚拟 IP 加入对局。支持 Windows 10/11 x64，内置 EasyTier v2.6.4，首次进房时自动解包。
 
-顶部的游戏切换器列出已支持的模块，包括《文明 VI》、我的世界局域网（Java 版）和自定义联机。房主和好友需选择同一模块。离开房间后可以重新选择游戏。底部滑块的显示器、太阳、月亮图标分别对应跟随系统、浅色、深色。点击选项或拖动后松开即可切换，也可按 Tab 聚焦后用左右方向键选择。首次启动跟随 Windows 应用模式，手动选择会保存在当前 Windows 账户。
+## 快速开始
 
-从 0.2.0-alpha.2 起，大厅使用 WPF 和 XAML 绘制窗口。SVG 动作图标在构建时生成 WPF 矢量路径；应用图标提供 16 到 256 像素的 ICO 图层。20 人房间的成员列表独立滚动。
+1. 双方下载 `GameLobby-win-x64.exe`，双击并接受管理员权限提示。[GitHub 发行版](https://github.com/LimingDusk/easytier-game-lobby/releases)
+2. 选择同一个游戏模块。房主点「创建房间」，复制邀请码私发给好友。好友粘贴邀请码后点「加入房间」。
+3. 点「刷新节点」，在「房间成员」查看虚拟 IP 和连接方式，再进入游戏。联机期间保持大厅运行，结束后点「离开房间」。
 
-窗口外框跟随系统：Windows 10 使用直角，Windows 11 请求系统圆角，最大化与贴靠时由系统决定边缘外观。加入房间前，邀请码输入框会遮挡输入与粘贴的内容，获得焦点时隐藏提示文字。
+## 游戏内联机
 
-## 玩家使用
+- 在 **《文明 VI》** 中，双方进入「多人游戏 → 本地网络」，房主创建对局，好友选中加入。跨网搜房和回合推进已通过双机实测。
+- 使用 **我的世界局域网（Java 版）** 时，房主开放单人世界，分享大厅显示的虚拟 IP 和游戏显示的端口。好友在「多人游戏 → 直接连接」输入 `房主虚拟IP:端口`。
+- **自定义联机** 适用于支持局域网搜房或 IP 直连的游戏。房主在游戏内建房，好友搜房或用房主虚拟 IP 和端口直连。
 
-1. 双方从 [Releases](https://github.com/LimingDusk/easytier-game-lobby/releases) 下载 `GameLobby-win-x64.exe`。
-2. 双击并接受 Windows 管理员权限提示。首次创建或加入房间时，启动器会将自带的 EasyTier v2.6.4 解包到 `%ProgramFiles%\EasyTierGameLobby\engines`。联机时请保持启动器运行。
-3. 从 alpha.6 起，房主每次创建房间时会从内置的共享节点中随机选一个。要固定使用某个节点，可在建房前打开「网络诊断」填写自定义引导地址。房主在选定的游戏模块点「创建房间」，复制邀请码私发给朋友。朋友粘贴后点「加入房间」，GL2 邀请码会自动带入房主选中的节点。双方请使用 alpha.5 或更高版本。加入旧版 GL1 房间时可手填旧房主使用的地址。进房后邀请码默认遮挡，「复制邀请码」会复制完整内容，点击眼睛图标可查看原文。邀请码包含该虚拟网络的密钥。整个游戏过程中保持大厅运行。
-4. 双方点「刷新节点」，检查是否看到对方的虚拟 IP。以《文明 VI》为例，房主在游戏里选「多人游戏 → 本地网络 → 创建游戏」，朋友在同一菜单选择该对局。完成后点「离开房间」。
+## 网络诊断
 
-内置共享节点为 `tcp://150.158.142.253:11010` 和 `tcp://225284.xyz:11010`。建房后可在「网络诊断」查看实际选中的地址。[DreamLife 节点说明](https://easytier.dreamlife.indevs.in/) · [QtEasyTier 公共节点公告](https://info.qtet.cn/)
+- 房主可在建房前通过「网络诊断」指定引导地址。留空时，每次建房随机选一个共享节点，地址随 GL2 邀请码分享。加入旧版 GL1 房间时，可手填房主使用的地址。
+- 「网络诊断」显示实际引导地址、连接状态和 UDP 广播统计。若房间里只有本机，先核对邀请码和引导连接。若已看到队友但进不了游戏，检查端口、游戏版本、模组和 Windows 防火墙入站规则。
+- 本机 EasyTier 的监听端口由系统分配。引导地址使用公共节点的服务端口，游戏直连使用游戏显示的端口。
+- 「导出日志」可保存最近 600 条记录，邀请码和密钥会自动遮挡。本地日志位于 `%LOCALAPPDATA%\EasyTierGameLobby\Logs`。
 
-我的世界局域网（Java 版）：房主在单人世界按 Esc，选择「对局域网开放」，把游戏聊天栏显示的端口和大厅显示的本机虚拟 IP 发给队友。队友在「多人游戏 → 直接连接」中输入 `虚拟IP:端口`。重新开放世界时请核对端口。
+内置节点为 `tcp://150.158.142.253:11010` 和 `tcp://225284.xyz:11010`。[DreamLife 节点说明](https://easytier.dreamlife.indevs.in/) · [QtEasyTier 公共节点公告](https://info.qtet.cn/)
 
-自定义联机：适用于支持局域网搜房或 IP 直连的游戏。双方进入同一大厅房间后，房主在游戏内建房，队友在游戏内搜房，或按该游戏要求填写房主虚拟 IP 和游戏端口。
+## 开发与测试
 
-节点列表用于区分网络连接问题和游戏大厅发现问题。若只有本机节点，先核对邀请码及对公共引导节点的连通性。若已看到队友但搜不到游戏，请在组网后重新进入本地网络菜单，核对游戏版本、模组和游戏在虚拟网卡上的防火墙权限。
+在 Windows 上使用 .NET 8 SDK。运行开发构建时，将 EasyTier 放在 `GameLobby.exe` 同级的 `engine` 目录。
 
-## 实现和验证
+```powershell
+dotnet build src/GameLobby.csproj
+dotnet run --project tests/RoomChecks.csproj
+dotnet run --project tests/window/WindowChecks.csproj -- previews
+```
 
-- `src/Tunnel.cs` 管理独立的 EasyTier 进程，使用公共引导节点、房主建房时配置独立的本机虚拟 IP，加入者由 EasyTier 动态分配地址，并通过同版本 CLI 查询节点。房间密钥通过子进程环境传递。
-- 建房或加入时，系统会给本机 EasyTier 数据监听器分配空闲端口。引导地址里的端口由公共节点提供，游戏端口由游戏本身提供。
-- `src/Games/GameProfile.cs` 登记游戏标识、显示名称、广播需求及双方的入局指引。新增采用相同联机流程的游戏可以增加一个条目。
-- 在 Windows 上用 .NET 8 SDK 运行 `dotnet run --project tests/RoomChecks.csproj` 和 `dotnet build src/GameLobby.csproj`。运行开发构建时，将内核安装到 GameLobby.exe 旁边的 engine 目录。在 GitHub Actions 运行 Windows build 可获取单文件 EXE，推送 v* 标签会自动发布 GitHub 预发行版。发布构建嵌入经过 SHA-256 验证的官方内核压缩包。
-- 双机验收使用两条不同的上网线路。确认双方节点可见，记录直连或中转路径，在《文明 VI》本地网络列表发现房间并加入，推进一回合，离开后重新加入。需两台装有兼容版本游戏的 Windows 电脑。
+游戏模块定义在 `src/Games/GameProfile.cs`，EasyTier 进程由 `src/Tunnel.cs` 管理。Windows build 工作流生成单文件 EXE 和界面预览，`v*` 标签触发预发行流程，内置的官方内核包经过 SHA-256 校验。
 
-### Windows 性能对照
+<details>
+<summary>容量与性能复测</summary>
 
-在同一台 Windows 电脑上分别运行旧版与新版。进房后保持大厅主页空闲，在任务管理器“详细信息”中找到大厅 PID，用管理员 PowerShell 运行 `./scripts/Measure-Room.ps1 -LobbyProcessId 1234 -Seconds 60`（替换 PID）。输出为该大厅启动的 CLI 次数、大厅与内核在采样期间消耗的 CPU 秒数，以及采样结束时各自的工作集。可在诊断页重复一次。首次进房与已缓存内核的进房耗时应分别记录。
-
-双机测速使用队友的虚拟 IP，在相同线路上分别测试两个方向，记录实际直连或中转、吞吐量、负载下的 P95 往返延迟和丢包。组网容量按 2、4、8、20 个玩家节点逐档验收，房主计入人数，独立中转另计。20 节点要求每端看到相同成员及地址，离房后减为 19，再加入后恢复 20，同时验证 19 个成员与房主的两个传输方向。记录聚合吞吐、最慢成员速率、P95 延迟及丢包。游戏实局另按游戏支持的席位数验证搜房、加入、推进回合及重进。
-
-### 本机 20 节点复测
-
-使用 Python 3.8 或以上版本和对应系统的 EasyTier v2.6.4 官方程序。在仓库根目录运行以下命令，将目录替换为同时包含 core 和 cli 的目录：
+使用 Python 3.8+ 和 EasyTier v2.6.4，将 `PATH_TO_ENGINE` 换成同时包含 core 和 cli 的目录。
 
 ```sh
 python tests/mesh_capacity.py --engine-dir PATH_TO_ENGINE --nodes 20
 python tests/mesh_capacity.py --engine-dir PATH_TO_ENGINE --nodes 20 --relay
 ```
 
-每轮在回环地址建立独立网络，不创建虚拟网卡。测试检查每台节点看到的名称和地址，退出并重启一个成员，再检查每个成员到房主的路径。随后 19 名成员并发向房主上传，每人 8 MiB，再并发下载相同数据量，逐块校验内容。最后每位成员每秒发送一次 256 字节 TCP 回显请求，默认持续 60 秒。输出包括两个方向的聚合和最慢成员速率，以及各成员 P95 应用层往返时间中的最大值。超时、内容错误或成员表不一致会导致测试失败。该负载覆盖房主与各成员之间的通信；Windows 广播搜房、跨网丢包和游戏回合需单独验证。
+回环测试覆盖节点同步、离房重进和并发收发。Windows 跨网、广播搜房和游戏回合需双机验证。
 
-### 界面验收
+对比 Windows 版本性能时，在同一台电脑进房后用管理员 PowerShell 运行 `./scripts/Measure-Room.ps1 -LobbyProcessId 1234 -Seconds 60`，将 `1234` 换成大厅进程 PID。脚本记录 CLI 次数、CPU 时间和工作集。
 
-在 Windows 上运行 `dotnet run --project tests/window/WindowChecks.csproj -- previews`。检查程序使用样例房间数据生成空房浅色、六人浅色、双人深色、网络诊断四张实际 WPF 渲染图，并检查最小窗口下的 20 人滚动、邀请码显示和主题偏好。PNG 保存在指定目录。单文件截图工具直接双击会将四张 PNG 写入工具旁的 previews 文件夹；Windows build 工作流会将截图保存为 GameLobby-WPF-previews 构件。
+</details>
 
-## 上游
-
-[EasyTier v2.6.4 发行包与广播中继说明](https://github.com/EasyTier/EasyTier/releases/tag/v2.6.4) · [EasyTier 对应源码及许可证](https://github.com/EasyTier/EasyTier/tree/v2.6.4) · [文明 VI 官方游戏手册](https://downloads.2kgames.com/civilization/vi/manuals/eu/CIV_VI_25TH_ONLINE_MANUAL_AUS.pdf)
-
-## 连接诊断与日志
-
-房主独自建房也会创建虚拟网卡。默认房主地址为 `10.126.126.1/24`，若与活动网卡冲突会另选私网网段。大厅分别显示本机地址、共享节点和队友。从 0.2.0-alpha.1 起，主窗口每 4 秒独立刷新成员；后台每 32 秒采样引导连接和 UDP 广播数据。打开网络诊断时立即采样，停留期间每 4 秒刷新。首次进房在后台准备引擎，期间可以移动窗口。两台电脑使用相同的邀请码，日志里的房间标识应该一致。若只有本机且引导节点均未连接，房主可改用可达的 EasyTier 共享节点，重新建房后分享新邀请码。双方能看到彼此虚拟 IP 后，重新进入文明 VI 的本地网络大厅，观察建房、搜房前后的广播计数。计数包括其他应用的广播。
-
-主界面的「房间成员」显示本机与队友的虚拟 IP 和连接方式。引导节点与 UDP 广播统计可在「网络诊断」中查看。
-
-在两台电脑上分别点击「网络诊断 → 导出日志」，保存最近 600 条带时区的记录。日志包含角色、房间标识、节点名称、虚拟 IP、引导地址、内核错误和广播统计。启动器会隐藏邀请码和房间密钥。本地日志位于 `%LOCALAPPDATA%\EasyTierGameLobby\Logs`，每次启动单独记录。
+[EasyTier 发行包](https://github.com/EasyTier/EasyTier/releases/tag/v2.6.4) · [EasyTier 源码和许可证](https://github.com/EasyTier/EasyTier/tree/v2.6.4) · [《文明 VI》官方手册](https://downloads.2kgames.com/civilization/vi/manuals/eu/CIV_VI_25TH_ONLINE_MANUAL_AUS.pdf)
