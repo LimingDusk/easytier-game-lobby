@@ -32,6 +32,35 @@ internal static class WindowChecks
                 window.UpdateLayout();
                 window.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
             }
+            void CheckGameMenu()
+            {
+                var menu = window.OpenGames();
+                try
+                {
+                    Layout();
+                    menu.UpdateLayout();
+                    var panel = (Border)menu.Template.FindName("panel", menu);
+                    var selector = (Border)window.games.Template.FindName("box", window.games);
+                    Check(menu.IsOpen && Math.Abs(panel.ActualWidth - selector.ActualWidth) < 1 &&
+                          panel.CornerRadius == selector.CornerRadius, "Game menu width and corners match the selector");
+                    Check(((SolidColorBrush)panel.Background).Color == ((SolidColorBrush)selector.Background).Color &&
+                          ((SolidColorBrush)panel.BorderBrush).Color == ((SolidColorBrush)window.games.BorderBrush).Color,
+                          "Game menu uses the selector's theme colors");
+
+                    var items = menu.Items.Cast<MenuItem>().ToArray();
+                    Check(items.Select(item => (string)item.Header).SequenceEqual(GameProfile.All.Select(game => game.Name)),
+                          "All game modules appear in the menu");
+                    var selected = items.Single(item => item.IsChecked);
+                    Check((string)selected.Header == window.gameName.Text &&
+                          selected.Template.FindName("selectedDot", selected) is FrameworkElement { Visibility: Visibility.Visible },
+                          "Game menu marks the current module");
+                }
+                finally
+                {
+                    menu.IsOpen = false;
+                    Layout();
+                }
+            }
             void Capture(string name)
             {
                 Layout();
@@ -73,6 +102,7 @@ internal static class WindowChecks
             Check(((SolidColorBrush)window.Background).Color.R == (system is 0 ? 0x14 : 0xf3), "System theme color");
             window.lightMode.IsChecked = true;
             Capture("01-empty-light");
+            CheckGameMenu();
             var room = Room.Create(GameProfile.All[0]);
             window.joinInvite.Focus();
             Layout();
@@ -113,6 +143,7 @@ internal static class WindowChecks
                   window.updateButton.IsVisible && window.status.ActualWidth >= 80 && scroll.VerticalOffset > 0,
                   "Fixed guide and footer at minimum size");
             window.SetRoom(null);
+            CheckGameMenu();
             window.Close();
             var reopened = new Lobby();
             Check(reopened.darkMode.IsChecked == true, "Saved appearance");

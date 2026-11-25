@@ -89,18 +89,25 @@ public partial class Lobby : Window
         status.Text = "正在完成准备并关闭大厅…";
     }
 
-    private void OpenGames()
+    internal ContextMenu OpenGames()
     {
-        var menu = new ContextMenu { PlacementTarget = games, Placement = PlacementMode.Bottom, MinWidth = games.ActualWidth };
-        menu.Background = (System.Windows.Media.Brush)FindResource("Surface");
-        menu.Foreground = Foreground;
+        var menu = new ContextMenu
+        {
+            Style = (Style)FindResource("GameMenu"),
+            PlacementTarget = games,
+            Placement = PlacementMode.Bottom,
+            Width = games.ActualWidth,
+            FontFamily = games.FontFamily
+        };
         foreach (var game in GameProfile.All)
         {
             var item = new MenuItem { Header = game.Name, IsChecked = selectedGame == game };
+            if (item.IsChecked) AutomationProperties.SetItemStatus(item, "当前游戏模块");
             item.Click += (_, _) => { selectedGame = game; gameName.Text = game.Name; };
             menu.Items.Add(item);
         }
         menu.IsOpen = true;
+        return menu;
     }
 
     internal void SwitchPage(bool diagnostic)
