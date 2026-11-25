@@ -56,24 +56,31 @@ internal sealed class Tunnel(SessionLog log) : IDisposable
             if (await TryStartAsync(room, hosting, address).ConfigureAwait(false)) return;
             if (attempt == MaxStartAttempts) break;
 
-            log.Write($"内核管理端口已占用（第 {attempt} 次），正在更换端口。");
+            log.Write($"内核监听端口已占用（第 {attempt} 次），正在重试。");
             await Task.Delay(100 << (attempt - 1)).ConfigureAwait(false);
         }
-        throw new InvalidOperationException($"内核管理端口连续 {MaxStartAttempts} 次绑定失败，请稍后重试。");
+        throw new InvalidOperationException($"内核监听端口连续 {MaxStartAttempts} 次绑定失败，请稍后重试。");
     }
 
     private async Task<bool> TryStartAsync(Room room, bool hosting, IPAddress? address)
     {
         IPEndPoint portal;
-        using (var probe = new TcpListener(IPAddress.Loopback, 0))
+        int fakeTcpPort;
+        using (var rpcProbe = new TcpListener(IPAddress.Loopback, 0))
+        using (var fakeTcpProbe = new TcpListener(IPAddress.Any, 0))
         {
-            probe.Start();
-            portal = (IPEndPoint)probe.LocalEndpoint;
+            rpcProbe.Start();
+            fakeTcpProbe.Start();
+            portal = (IPEndPoint)rpcProbe.LocalEndpoint;
+            fakeTcpPort = ((IPEndPoint)fakeTcpProbe.LocalEndpoint).Port;
         }
 
         string instanceName = $"game-lobby-{Guid.NewGuid():N}";
+        // EasyTier 2.6.4 advertises the configured FakeTCP port verbatim, even when it is zero.
         var info = Tool("easytier-core.exe", "--network-name", room.Network, "--instance-name", instanceName,
-            "--rpc-portal", portal.ToString(), "--console-log-level", "warn", "--dhcp", hosting ? "false" : "true");
+            "--rpc-portal", portal.ToString(), "--listeners", $"faketcp:{fakeTcpPort}",
+            "tcp:0", "udp:0", "wg:0", "quic:0", "ws:0", "wss:0",
+            "--console-log-level", "warn", "--dhcp", hosting ? "false" : "true");
         if (address != null)
         {
             info.ArgumentList.Add("--ipv4");

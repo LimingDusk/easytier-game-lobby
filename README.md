@@ -26,6 +26,7 @@
 ## 实现和验证
 
 - `src/Tunnel.cs` 管理独立的 EasyTier 进程，使用公共引导节点、房主建房时配置独立的本机虚拟 IP，加入者由 EasyTier 动态分配地址，并通过同版本 CLI 查询节点。房间密钥通过子进程环境传递。
+- 建房或加入时，系统会给本机 EasyTier 数据监听器分配空闲端口。引导地址里的端口由公共节点提供，游戏端口由游戏本身提供。
 - `src/Games/GameProfile.cs` 登记游戏标识、显示名称、广播需求及双方的入局指引。新增采用相同联机流程的游戏可以增加一个条目。
 - 在 Windows 上用 .NET 8 SDK 运行 `dotnet run --project tests/RoomChecks.csproj` 和 `dotnet build src/GameLobby.csproj`。运行开发构建时，将内核安装到 GameLobby.exe 旁边的 engine 目录。在 GitHub Actions 运行 Windows build 可获取单文件 EXE，推送 v* 标签会自动发布 GitHub 预发行版。发布构建嵌入经过 SHA-256 验证的官方内核压缩包。
 - 双机验收使用两条不同的上网线路。确认双方节点可见，记录直连或中转路径，在《文明 VI》本地网络列表发现房间并加入，推进一回合，离开后重新加入。需两台装有兼容版本游戏的 Windows 电脑。
