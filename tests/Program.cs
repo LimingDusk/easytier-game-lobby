@@ -86,17 +86,20 @@ if (HostNetwork.Choose([]).ToString() != "10.126.126.1" ||
 if (NetworkReport.Peers(localOnly).Contains("等待虚拟 IP"))
     throw new Exception("Bootstrap is incorrectly waiting for a player IP");
 
-if (guest.Bootstrap != "tcp://150.158.142.253:11010" || host.Bootstrap != guest.Bootstrap)
-    throw new Exception("Default node mismatch");
+if (Room.SharedBootstraps.Distinct().Count() < 2 ||
+    !Room.SharedBootstraps.Contains(host.Bootstrap) || guest.Bootstrap != host.Bootstrap)
+    throw new Exception("Selected shared node was not carried in the invitation");
 var custom = Room.Create(game, "udp://[::1]:12345");
 var customGuest = Room.Parse(game, custom.Invite, "tcp://other.example:1122");
-if (customGuest.Bootstrap != custom.Bootstrap || customGuest.Network != custom.Network)
+if (custom.Bootstrap != "udp://[::1]:12345" ||
+    customGuest.Bootstrap != custom.Bootstrap || customGuest.Network != custom.Network)
     throw new Exception("Host bootstrap should win over guest settings");
 var legacy = $"GL1-{game.Id}-{host.Secret}";
 var oldRoom = Room.Parse(game, legacy, "tcp://legacy.example:11010");
 var legacyNetwork = "gl-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
     System.Text.Encoding.ASCII.GetBytes(legacy)))[..24];
 if (oldRoom.Bootstrap != "tcp://legacy.example:11010" || oldRoom.Network != legacyNetwork ||
+    Room.Parse(game, legacy).Bootstrap != "tcp://150.158.142.253:11010" ||
     Room.Parse(game, oldRoom.Invite).Network != legacyNetwork)
     throw new Exception("Legacy join or reshare failed");
 foreach (var invalid in new[] { "", "http://example.org:80", "tcp://example.org:0",

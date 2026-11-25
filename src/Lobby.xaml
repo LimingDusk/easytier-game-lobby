@@ -171,7 +171,7 @@
                     <TextBlock Text="自定义引导节点" Width="178" VerticalAlignment="Center" FontWeight="SemiBold"/>
                     <Grid>
                         <TextBox x:Name="bootstrap" MinHeight="40" FontFamily="Consolas" AutomationProperties.Name="自定义引导节点"/>
-                        <TextBlock x:Name="bootstrapHint" Style="{StaticResource Secondary}" FontFamily="Consolas" Margin="12,0" IsHitTestVisible="False"/>
+                        <TextBlock x:Name="bootstrapHint" Text="留空时，建房随机选择共享节点" Style="{StaticResource Secondary}" Margin="12,0" IsHitTestVisible="False"/>
                     </Grid>
                 </DockPanel>
             </Border>

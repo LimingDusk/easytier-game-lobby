@@ -43,7 +43,6 @@ public partial class Lobby : Window
         };
         joinInvite.PasswordChanged += (_, _) => UpdateInviteHint();
         joinInvite.IsKeyboardFocusWithinChanged += (_, _) => UpdateInviteHint();
-        bootstrapHint.Text = Room.DefaultBootstrap;
         bootstrap.TextChanged += (_, _) => bootstrapHint.Visibility = Visible(bootstrap.Text.Length == 0);
         inspect.Click += (_, _) => _ = RunActionAsync(RefreshPeers, "刷新失败");
         togglePage.Click += (_, _) => _ = RunActionAsync(TogglePageAsync, "切换页面失败");
@@ -121,7 +120,6 @@ public partial class Lobby : Window
         if (active) joinInvite.Clear();
         revealed = false;
         ShowInvite();
-        bootstrapHint.Text = room?.Bootstrap ?? Room.DefaultBootstrap;
         if (room != null)
         {
             guideTitle.Text = hosting ? "房主开房步骤" : "加入游戏步骤";

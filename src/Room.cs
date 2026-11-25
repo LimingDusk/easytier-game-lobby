@@ -7,7 +7,10 @@ namespace GameLobby;
 
 internal sealed record Room
 {
-    public const string DefaultBootstrap = "tcp://150.158.142.253:11010";
+    private const string LegacyBootstrap = "tcp://150.158.142.253:11010";
+    internal static IReadOnlyList<string> SharedBootstraps { get; } = Array.AsReadOnly<string>(
+        [LegacyBootstrap, "tcp://225284.xyz:11010"]);
+
     private Room(GameProfile game, string token, string bootstrap)
     {
         Game = game;
@@ -23,8 +26,12 @@ internal sealed record Room
     public string Network => "gl-" + Convert.ToHexString(SHA256.HashData(
         Encoding.ASCII.GetBytes($"GL1-{Game.Id}-{Secret}")))[..24];
 
-    public static Room Create(GameProfile game, string bootstrap = "") =>
-        new(game, Convert.ToHexString(RandomNumberGenerator.GetBytes(16)), bootstrap);
+    public static Room Create(GameProfile game, string bootstrap = "")
+    {
+        if (string.IsNullOrWhiteSpace(bootstrap))
+            bootstrap = SharedBootstraps[RandomNumberGenerator.GetInt32(SharedBootstraps.Count)];
+        return new(game, Convert.ToHexString(RandomNumberGenerator.GetBytes(16)), bootstrap);
+    }
 
     public static Room Parse(GameProfile game, string input, string legacyBootstrap = "")
     {
@@ -36,14 +43,14 @@ internal sealed record Room
         return (parts[0], fields.Length) switch
         {
             ("GL2", 2) when !string.IsNullOrWhiteSpace(fields[1]) => new(game, parts[2], fields[1]),
-            ("GL1", 1) => new(game, parts[2], legacyBootstrap),
+            ("GL1", 1) => new(game, parts[2],
+                string.IsNullOrWhiteSpace(legacyBootstrap) ? LegacyBootstrap : legacyBootstrap),
             _ => throw new FormatException("邀请码格式不完整或版本不受支持，请重新复制。")
         };
     }
 
     private static string NormalizeBootstrap(string input)
     {
-        if (string.IsNullOrWhiteSpace(input)) return DefaultBootstrap;
         string address = input.Trim();
         if (address.Length <= 320 && Regex.IsMatch(address, @"\A(?:tcp|udp)://(?:[a-z0-9.-]+|\[[0-9a-f:.]+\]):[0-9]{1,5}/?\z", RegexOptions.IgnoreCase) &&
             Uri.TryCreate(address, UriKind.Absolute, out var uri) && uri.Port > 0)
