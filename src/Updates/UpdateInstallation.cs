@@ -61,7 +61,7 @@ internal sealed class UpdateInstallation
         }
     }
 
-    internal async Task<int> ApplyAsync(GitHubUpdates source, UpdatePackage package, IProgress<int>? progress,
+    internal async Task<int> ApplyAsync(GitHubUpdates source, UpdatePackage package, IProgress<UpdateProgress>? progress,
         CancellationToken cancellationToken)
     {
         if (!package.IsValid() || !IsNewer(package))
@@ -75,17 +75,19 @@ internal sealed class UpdateInstallation
         string executablePath = PackagePath(package);
         string packageDirectory = Path.GetDirectoryName(executablePath)!;
         UpdateFiles.DirectoryAt(packageDirectory, create: true);
-        string download = Path.Combine(packageDirectory, Guid.NewGuid().ToString("N") + ".download");
+        string download = Path.Combine(packageDirectory, "package.download");
         string pending = Path.Combine(directory, Guid.NewGuid().ToString("N") + ".json");
         try
         {
             if (!IsCached(executablePath, package))
             {
-                using (var file = UpdateFiles.CreateFile(download, FileMode.CreateNew))
+                try
                 {
+                    using var file = UpdateFiles.CreateFile(download, FileMode.OpenOrCreate);
                     await source.DownloadAsync(package, file, progress, cancellationToken).ConfigureAwait(false);
                     file.Flush(flushToDisk: true);
                 }
+                catch (InvalidDataException) { TryDelete(download); throw; }
                 File.Move(download, executablePath, overwrite: true);
             }
 
@@ -95,6 +97,7 @@ internal sealed class UpdateInstallation
                 record.Flush(flushToDisk: true);
             }
             cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(new(UpdatePhase.Starting));
             using var child = LaunchVerified(package, cancellationToken);
             try
             {
@@ -104,11 +107,7 @@ internal sealed class UpdateInstallation
             catch { UpdateRestart.Stop(child); throw; }
             return child.Id;
         }
-        finally
-        {
-            TryDelete(download);
-            TryDelete(pending);
-        }
+        finally { TryDelete(pending); }
     }
 
     private void EnsureDirectories(bool create)

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json;
 using GameLobby;
@@ -58,6 +59,21 @@ Check(await checks.CheckAsync(ParseVersion("0.1.9"), CancellationToken.None) is 
 Check(await checks.CheckAsync(ParseVersion("0.2.0-alpha.10"), CancellationToken.None) is null, "No downgrade or reinstall");
 
 var target = package!;
+HttpResponseMessage Full(byte[] bytes) => new(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) };
+HttpResponseMessage Part(int first, int last)
+{
+    var response = new HttpResponseMessage(HttpStatusCode.PartialContent)
+        { Content = new ByteArrayContent(payload[first..(last + 1)]) };
+    response.Content.Headers.ContentRange = new ContentRangeHeaderValue(first, last, payload.Length);
+    return response;
+}
+HttpResponseMessage Interrupted()
+{
+    var response = Full(payload[..2]);
+    response.Content.Headers.ContentLength = payload.Length;
+    return response;
+}
+
 int followed = 0;
 using var downloader = new GitHubUpdates(new Reply(request =>
 {
@@ -75,10 +91,105 @@ using var destination = new MemoryStream();
 await downloader.DownloadAsync(target, destination, null, CancellationToken.None);
 Check(followed == 2 && destination.ToArray().SequenceEqual(payload), "Verified download through release CDN");
 
+int origins = 0, transfers = 0;
+using var reconnect = new GitHubUpdates(new Reply(request =>
+{
+    string? range = request.Headers.Range?.ToString();
+    Check(range == (transfers == 0 ? null : "bytes=2-"), "A retry requests only the missing bytes");
+    if (request.RequestUri?.Host == "github.com")
+    {
+        origins++;
+        var redirect = new HttpResponseMessage(HttpStatusCode.Found);
+        redirect.Headers.Location = new($"https://release-assets.githubusercontent.com/test/{origins}");
+        return redirect;
+    }
+    return ++transfers == 1 ? Interrupted() : Part(2, 3);
+}));
+using var resumed = new MemoryStream();
+var reports = new List<UpdateProgress>();
+await reconnect.DownloadAsync(target, resumed, new InlineProgress(reports.Add), CancellationToken.None);
+Check(origins == 2 && transfers == 2 && resumed.ToArray().SequenceEqual(payload) &&
+      reports.Contains(new(UpdatePhase.Retrying, 50, 1)), "An interrupted transfer retains progress and fetches a fresh redirect");
+
+using var paused = new CancellationTokenSource();
+using var shortDownload = new GitHubUpdates(new Reply(_ => Interrupted()));
+string partialPath = Path.Combine(Path.GetTempPath(), $"GameLobby-update-check-{Guid.NewGuid():N}.download");
+try
+{
+    using (var partial = File.Open(partialPath, FileMode.CreateNew))
+    {
+        try
+        {
+            await shortDownload.DownloadAsync(target, partial, new InlineProgress(progress =>
+            {
+                if (progress is { Phase: UpdatePhase.Downloading, Percent: 50 }) paused.Cancel();
+            }), paused.Token);
+            throw new InvalidOperationException("Pausing a partial download was ignored.");
+        }
+        catch (OperationCanceledException) when (paused.IsCancellationRequested) { }
+        Check(partial.Length == 2, "Pausing keeps the downloaded prefix");
+    }
+    using var segmented = new GitHubUpdates(new Reply(request => request.Headers.Range?.ToString() switch
+    {
+        "bytes=2-" => Part(2, 2),
+        "bytes=3-" => Part(3, 3),
+        _ => throw new InvalidOperationException("The saved download was not resumed.")
+    }));
+    using var reopened = File.Open(partialPath, FileMode.Open);
+    await segmented.DownloadAsync(target, reopened, null, CancellationToken.None);
+    Check(reopened.Length == payload.Length, "A saved file resumes after reopening and accepts multiple valid ranges");
+}
+finally { File.Delete(partialPath); }
+
+using var stalledStream = new StalledStream(payload[..2]);
+int stalledRequests = 0;
+using var stalled = new GitHubUpdates(new Reply(request =>
+{
+    if (++stalledRequests == 1)
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(stalledStream) };
+        response.Content.Headers.ContentLength = payload.Length;
+        return response;
+    }
+    Check(request.Headers.Range?.ToString() == "bytes=2-", "Idle timeouts keep the completed range");
+    return Part(2, 3);
+}), TimeSpan.FromMilliseconds(100));
+using var timedOut = new MemoryStream();
+await stalled.DownloadAsync(target, timedOut, null, CancellationToken.None);
+Check(stalledStream.TimedOut && stalledRequests == 2 && timedOut.ToArray().SequenceEqual(payload),
+      "A stalled response is cancelled and resumed");
+
+using var fallback = new MemoryStream();
+fallback.Write([0, 0]);
+using var ignoresRange = new GitHubUpdates(new Reply(request =>
+{
+    Check(request.Headers.Range?.ToString() == "bytes=2-", "Existing data is offered for resume");
+    return Full(payload);
+}));
+await ignoresRange.DownloadAsync(target, fallback, null, CancellationToken.None);
+Check(fallback.ToArray().SequenceEqual(payload), "A full response safely replaces a partial file");
+
+int rejectedRanges = 0;
+using var rejectsRange = new GitHubUpdates(new Reply(request =>
+{
+    if (++rejectedRanges == 1)
+    {
+        Check(request.Headers.Range?.ToString() == "bytes=2-", "Range rejection starts with a partial file");
+        return Part(1, 3);
+    }
+    Check(request.Headers.Range is null, "A mismatched Content-Range is discarded before a fresh request");
+    return Full(payload);
+}));
+fallback.SetLength(2);
+await rejectsRange.DownloadAsync(target, fallback, null, CancellationToken.None);
+Check(rejectedRanges == 2 && fallback.ToArray().SequenceEqual(payload), "Invalid ranges are never appended");
+
 using var corrupt = new GitHubUpdates(new Reply(_ =>
     new(HttpStatusCode.OK) { Content = new ByteArrayContent([0, 0, 0, 0]) }));
-await ExpectInvalid(() => corrupt.DownloadAsync(target, Stream.Null, null, CancellationToken.None));
-await ExpectInvalid(() => corrupt.DownloadAsync(target with { Size = 5 }, Stream.Null, null, CancellationToken.None));
+using var invalid = new MemoryStream();
+await ExpectInvalid(() => corrupt.DownloadAsync(target, invalid, null, CancellationToken.None));
+Check(invalid.Length == 0, "Failed SHA-256 verification discards the invalid data");
+await ExpectInvalid(() => corrupt.DownloadAsync(target with { Size = 5 }, invalid, null, CancellationToken.None));
 
 int requests = 0;
 using var unsafeRedirect = new GitHubUpdates(new Reply(_ =>
@@ -88,18 +199,41 @@ using var unsafeRedirect = new GitHubUpdates(new Reply(_ =>
     response.Headers.Location = new("https://example.org/standalone.exe");
     return response;
 }));
-await ExpectInvalid(() => unsafeRedirect.DownloadAsync(target, Stream.Null, null, CancellationToken.None));
+await ExpectInvalid(() => unsafeRedirect.DownloadAsync(target, invalid, null, CancellationToken.None));
 Check(requests == 1, "Unverified redirects are not followed");
 using var cancelled = new CancellationTokenSource();
 cancelled.Cancel();
 try
 {
-    await downloader.DownloadAsync(target, Stream.Null, null, cancelled.Token);
+    await downloader.DownloadAsync(target, invalid, null, cancelled.Token);
     throw new InvalidOperationException("Cancellation ignored");
 }
 catch (OperationCanceledException) { }
 
-Console.WriteLine("Update version, channel, artifact, redirect, checksum and cancellation checks passed.");
+Console.WriteLine("Update version, channel, redirects, interrupted downloads, saved progress, idle timeouts and SHA-256 checks passed.");
+
+sealed class InlineProgress(Action<UpdateProgress> report) : IProgress<UpdateProgress>
+{
+    public void Report(UpdateProgress value) => report(value);
+}
+
+sealed class StalledStream(byte[] prefix) : MemoryStream(prefix)
+{
+    public bool TimedOut { get; private set; }
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        if (Position < Length)
+            return await base.ReadAsync(buffer, cancellationToken);
+        try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            TimedOut = true;
+            throw;
+        }
+        throw new InvalidOperationException("Stalled read completed unexpectedly.");
+    }
+}
 
 sealed class Reply(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
 {

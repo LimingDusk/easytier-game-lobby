@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
@@ -66,7 +67,7 @@ public partial class Lobby
             if (token.IsCancellationRequested) return;
             hint = "检查更新失败，点击重试";
             if (manual) status.Text = "暂时无法检查更新，请稍后重试。";
-            log.Write($"检查更新失败（{error.GetType().Name}）");
+            LogUpdateFailure("检查更新", error);
         }
         finally
         {
@@ -92,7 +93,7 @@ public partial class Lobby
             status.Text = "离开房间后可以安装更新。";
             return;
         }
-        var answer = MessageBox.Show(this, $"下载 {package.Tag} 并重新打开联机大厅？",
+        var answer = MessageBox.Show(this, $"安装 {package.Tag} 并重新打开联机大厅？",
             "安装更新", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
         if (answer != MessageBoxResult.Yes) return;
 
@@ -101,14 +102,21 @@ public partial class Lobby
         host.IsEnabled = join.IsEnabled = false;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(updateLifetime.Token);
         updateCancellation = cancellation;
-        UpdateButton("取消更新", "取消下载更新", enabled: true);
-        status.Text = "正在下载更新…";
-        var progress = new Progress<int>(percent =>
+        UpdateButton("暂停更新", "暂停并保留更新进度", enabled: true);
+        status.Text = "正在准备更新…";
+        var progress = new Progress<UpdateProgress>(update =>
         {
-            if (applyingUpdate && !cancellation.IsCancellationRequested)
-                status.Text = percent == 100 ? "正在校验并启动新版…" : $"正在下载更新 {percent}%";
+            if (!ReferenceEquals(updateCancellation, cancellation) || cancellation.IsCancellationRequested) return;
+            status.Text = update.Phase switch
+            {
+                UpdatePhase.Retrying => $"下载中断，正在重试 {update.Retry}/{GitHubUpdates.DownloadRetries}（{update.Percent}%）…",
+                UpdatePhase.Verifying => "下载完成，正在校验更新包…",
+                UpdatePhase.Starting => "正在打开新版联机大厅…",
+                _ => $"正在下载更新 {update.Percent}%"
+            };
         });
         bool restarted = false;
+        string nextAction = "安装更新";
         try
         {
             await Task.Run(() => updateInstallation.ApplyAsync(updateSource, package, progress, cancellation.Token));
@@ -116,21 +124,23 @@ public partial class Lobby
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
-            status.Text = "已取消更新。";
+            nextAction = "继续更新";
+            status.Text = "更新已暂停，再次点击可继续。";
         }
         catch (Exception error) when (UpdateFailure(error))
         {
-            offeredUpdate = null;
-            status.Text = error is InvalidDataException or InvalidOperationException
-                ? error.Message : "更新未完成，请重试或从 GitHub 下载。";
-            log.Write($"安装更新失败（{error.GetType().Name}）");
+            nextAction = "重试更新";
+            if (error is HttpRequestException { StatusCode: HttpStatusCode.NotFound or HttpStatusCode.Gone })
+                offeredUpdate = null;
+            status.Text = UpdateFailureMessage(error);
+            LogUpdateFailure("安装更新", error);
         }
         finally
         {
             applyingUpdate = false;
             updateCancellation = null;
             host.IsEnabled = join.IsEnabled = true;
-            ShowUpdateOffer($"当前版本 {SessionLog.Version}");
+            ShowUpdateOffer($"当前版本 {SessionLog.Version}", nextAction);
         }
         if (restarted || closeAfterUpdate) Close();
     }
@@ -144,12 +154,12 @@ public partial class Lobby
         return true;
     }
 
-    private void ShowUpdateOffer(string hint)
+    private void ShowUpdateOffer(string hint, string nextAction = "安装更新")
     {
         if (offeredUpdate is { } package)
         {
             updateButton.SetResourceReference(ForegroundProperty, "Accent");
-            UpdateButton("安装更新", $"发现新版本 {package.Tag}", enabled: true);
+            UpdateButton(nextAction, $"新版本 {package.Tag}", enabled: true);
         }
         else
         {
@@ -169,4 +179,30 @@ public partial class Lobby
     private static bool UpdateFailure(Exception error) => error is HttpRequestException or IOException or
         InvalidDataException or JsonException or OperationCanceledException or UnauthorizedAccessException or
         Win32Exception or InvalidOperationException;
+
+    private static string UpdateFailureMessage(Exception error) => error switch
+    {
+        HttpRequestException { StatusCode: HttpStatusCode.NotFound or HttpStatusCode.Gone } =>
+            "该发行包已不可用，请重新检查更新。",
+        HttpRequestException { StatusCode: HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests } =>
+            "GitHub 暂时拒绝下载，请稍后重试。",
+        HttpRequestException => "更新下载中断，点击「重试更新」继续。",
+        InvalidDataException or InvalidOperationException => error.Message,
+        UnauthorizedAccessException => "无法访问更新目录，请重试或从 GitHub 下载。",
+        IOException => "更新文件读写失败，请检查磁盘空间后重试。",
+        Win32Exception => "新版联机大厅无法启动，请重试。",
+        _ => "更新没有安装完成，请重试。"
+    };
+
+    private void LogUpdateFailure(string operation, Exception error)
+    {
+        string detail = error switch
+        {
+            HttpRequestException { StatusCode: { } statusCode } => $"HTTP {(int)statusCode}",
+            HttpRequestException { InnerException: { } reason } => $"{reason.GetType().Name} 0x{reason.HResult:X8}",
+            Win32Exception windows => $"Win32 {windows.NativeErrorCode}",
+            _ => $"{error.GetType().Name} 0x{error.HResult:X8}"
+        };
+        log.Write($"{operation}失败（{detail}）");
+    }
 }
