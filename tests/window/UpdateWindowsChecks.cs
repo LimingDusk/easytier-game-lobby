@@ -80,9 +80,15 @@ internal static class UpdateWindowsChecks
     {
         try
         {
+            // Retain a process handle before asking the window to close so ExitCode stays available.
+            _ = child.SafeHandle;
             if (child.MainWindowHandle == IntPtr.Zero || !child.CloseMainWindow() ||
-                !child.WaitForExit(8000) || child.ExitCode != 0)
+                !child.WaitForExit(8000))
                 throw new InvalidOperationException("The updated lobby did not open and close normally.");
+
+            int exitCode = child.ExitCode;
+            if (exitCode != 0)
+                throw new InvalidOperationException($"The updated lobby exited with code 0x{exitCode:X8}.");
         }
         finally
         {
