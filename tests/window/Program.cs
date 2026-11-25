@@ -15,7 +15,7 @@ internal static class WindowChecks
     {
         if (args is ["--update-package", var package])
         {
-            UpdateWindowsChecks.RunAsync(package).GetAwaiter().GetResult();
+            UpdateWindowsChecks.Run(package);
             return;
         }
         string outputDirectory = args.Length == 0 ? Path.Combine(AppContext.BaseDirectory, "previews") : args[0];

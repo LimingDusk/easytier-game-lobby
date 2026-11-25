@@ -33,7 +33,7 @@ internal static class UpdateWindowsChecks
             new StringContent(JsonSerializer.Serialize(releases)))));
     }
 
-    internal static async Task RunAsync(string fixture)
+    internal static void Run(string fixture)
     {
         string path = Path.GetFullPath(fixture);
         string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
@@ -50,7 +50,8 @@ internal static class UpdateWindowsChecks
                 bool rejected = false;
                 try
                 {
-                    await installation.ApplyAsync(corrupt, new(tag, 3, new string('A', 64)), null, CancellationToken.None);
+                    installation.ApplyAsync(corrupt, new(tag, 3, new string('A', 64)), null, CancellationToken.None)
+                        .GetAwaiter().GetResult();
                 }
                 catch (InvalidDataException) { rejected = true; }
                 if (!rejected || installation.TryLaunchInstalledUpdate() is not null)
@@ -61,7 +62,8 @@ internal static class UpdateWindowsChecks
             using (var source = File.OpenRead(path))
                 package = new(tag, source.Length, Convert.ToHexString(SHA256.HashData(source)));
             using var valid = new GitHubUpdates(new Reply(() => new StreamContent(File.OpenRead(path))));
-            int pid = await installation.ApplyAsync(valid, package, null, CancellationToken.None);
+            int pid = installation.ApplyAsync(valid, package, null, CancellationToken.None)
+                .GetAwaiter().GetResult();
             using (var child = Process.GetProcessById(pid)) VerifyAndClose(child);
 
             using var relaunched = installation.TryLaunchInstalledUpdate()

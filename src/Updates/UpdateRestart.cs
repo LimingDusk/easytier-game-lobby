@@ -40,11 +40,19 @@ internal static class UpdateRestart
         var child = Process.Start(start) ?? throw new InvalidOperationException("无法启动新版联机大厅。");
         try
         {
-            int signaled = WaitHandle.WaitAny([ready, cancellationToken.WaitHandle], TimeSpan.FromSeconds(20));
-            cancellationToken.ThrowIfCancellationRequested();
-            if (signaled != 0 || child.HasExited)
-                throw new InvalidOperationException("新版联机大厅未能正常打开。");
-            return child;
+            var elapsed = Stopwatch.StartNew();
+            do
+            {
+                // The original launcher also waits on its WPF STA thread.
+                bool windowReady = ready.WaitOne(200);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (child.HasExited)
+                    throw new InvalidOperationException($"新版联机大厅提前退出（0x{child.ExitCode:X8}）。");
+                if (windowReady) return child;
+            }
+            while (elapsed.Elapsed < TimeSpan.FromSeconds(45));
+
+            throw new InvalidOperationException("等待新版联机大厅打开超时。");
         }
         catch
         {

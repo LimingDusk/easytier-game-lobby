@@ -145,7 +145,8 @@ internal sealed class UpdateInstallation
             !ReleaseVersion.TryParse(FileVersionInfo.GetVersionInfo(path).ProductVersion, out var product) ||
             product.CompareTo(GetVersion(package)) != 0)
             throw new InvalidDataException("更新程序的版本或 SHA-256 校验失败。");
-        string extraction = Path.Combine(folder, "runtime");
+        // The .NET host adds the app name and bundle ID to its extraction path.
+        string extraction = Path.Combine(root, "runtime");
         UpdateFiles.DirectoryAt(extraction, create: true);
         return UpdateRestart.Launch(path, extraction, cancellationToken);
     }
