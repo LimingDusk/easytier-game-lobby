@@ -57,4 +57,13 @@ jobs:
       - name: Publish executable
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" GameLobby-win-x64.exe --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --generate-notes
+        run: |
+          tag="$GITHUB_REF_NAME"
+          title="$tag"
+          flags=(--verify-tag --generate-notes)
+          if [[ "${tag%%+*}" == *-* ]]; then
+            flags+=(--prerelease)
+          elif [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.0$ ]]; then
+            title="${tag%.0}"
+          fi
+          gh release create "$tag" GameLobby-win-x64.exe --repo "$GITHUB_REPOSITORY" --title "$title" "${flags[@]}"
