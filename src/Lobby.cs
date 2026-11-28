@@ -30,6 +30,7 @@ public partial class Lobby : Window
     {
         tunnel = new(log);
         InitializeComponent();
+        InitializeChat();
         InitializeAppearance();
         InitializeUpdates(installation, source);
         gameName.Text = selectedGame.Name;
@@ -64,7 +65,13 @@ public partial class Lobby : Window
         export.Click += (_, _) => ExportLog();
         timer.Tick += (_, _) => _ = RunActionAsync(RefreshRoom, "刷新失败");
         Closing += OnClosing;
-        Closed += (_, _) => { generation++; timer.Stop(); log.Write("关闭大厅"); };
+        Closed += (_, _) =>
+        {
+            generation++;
+            timer.Stop();
+            CloseChatConnection();
+            log.Write("关闭大厅");
+        };
         SetRoom(null);
         ResetMembers();
         status.Text = "未加入房间";
@@ -117,6 +124,7 @@ public partial class Lobby : Window
         pageIcon.Kind = diagnostic ? "back" : "pulse";
         pageLabel.Text = diagnostic ? "返回大厅" : "网络诊断";
         AutomationProperties.SetName(togglePage, pageLabel.Text);
+        RefreshChatVisibility();
     }
 
     internal void SetRoom(Room? room, bool hosting = false)
@@ -126,6 +134,8 @@ public partial class Lobby : Window
         else if (currentRoom != null) bootstrap.Text = customBootstrap;
         currentRoom = room;
         bool active = room != null;
+        CloseChatConnection();
+        ResetChatUi(active);
         bootstrap.IsEnabled = games.IsEnabled = !active;
         host.Visibility = join.Visibility = Visible(!active);
         leave.Visibility = copy.Visibility = eye.Visibility = inspect.Visibility = guideBar.Visibility = Visible(active);
@@ -320,6 +330,7 @@ public partial class Lobby : Window
             });
             if (current != generation) return;
             ShowPeers(snapshot, report);
+            if (snapshot != null) RefreshChatConnection(snapshot);
             status.Text = "每 4 秒刷新";
             if (report != lastPeerReport)
             {

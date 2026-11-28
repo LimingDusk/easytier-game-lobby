@@ -4,4 +4,5 @@
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup><Compile Remove="window/**/*.cs;updates/**/*.cs"/><Compile Include="../src/Room.cs"/><Compile Include="../src/HostNetwork.cs"/><Compile Include="../src/Games/GameProfile.cs"/><Compile Include="../src/NetworkReport.cs"/><Compile Include="../src/SessionLog.cs"/><Compile Include="../src/EngineBundle.cs"/></ItemGroup>
+  <ItemGroup><Compile Include="../src/RoomChat.cs"/></ItemGroup>
 </Project>

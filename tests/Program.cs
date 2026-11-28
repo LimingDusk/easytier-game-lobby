@@ -118,3 +118,5 @@ if (waitingRoster.Nodes.Count(n => !n.Shared) != 1 ||
     NetworkReport.ReadPeers(pair.Replace("p2p", "relay(2)")).Nodes.Last().Route != "中转")
     throw new Exception("Roster presentation lost player identity or connection type");
 Console.WriteLine("Room members and connection labels passed.");
+
+await ChatChecks.RunAsync(host.Secret, Room.Create(game).Secret);

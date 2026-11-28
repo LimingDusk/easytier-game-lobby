@@ -94,9 +94,15 @@ internal static class WindowChecks
                 Check(window.members.table.Items.Count == count && window.countBadge.Text == $"{count} 人", "Roster size");
                 Check(window.diagnosticNodes.table.Items.Count == count + 1, "Diagnostic roster");
             }
+            void ToggleChat()
+            {
+                window.chatToggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Layout();
+            }
 
             Layout();
             Check(window.systemMode.IsChecked == true && window.emptyState.IsVisible, "Default theme and lobby");
+            Check(!window.chatAction.IsVisible, "Chat entry is hidden outside a room");
             Check(window.githubButton.IsVisible && window.updateLabel.Text == "安装更新", "GitHub entry and startup update check");
             var system = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", null);
             Check(((SolidColorBrush)window.Background).Color.R == (system is 0 ? 0x14 : 0xf3), "System theme color");
@@ -118,6 +124,20 @@ internal static class WindowChecks
             Check(window.status.Text == "离开房间后可以安装更新。", "An update cannot interrupt a room");
             window.status.Text = "每 4 秒刷新";
             Check(!window.invite.Text.Contains(room.Secret) && !window.host.IsVisible && window.copy.IsVisible, "Private invitation");
+            window.Activate();
+            Layout();
+            Check(window.chatAction.IsVisible && !window.chatPanel.IsVisible && window.membersCard.IsVisible &&
+                  !window.chatUnreadDot.IsVisible && !window.chatSend.IsEnabled, "Room chat starts collapsed while the network connects");
+            window.ShowChatMessage(new ChatMessage("Ming-PC", "可以进游戏了。", DateTimeOffset.Now), own: false);
+            Check(window.chatUnreadDot.IsVisible, "A teammate's message marks collapsed chat unread");
+            ToggleChat();
+            Check(window.chatPanel.IsVisible && window.membersCard.IsVisible && Grid.GetColumn(window.chatPanel) == 1 &&
+                  window.chatUnreadDot.IsVisible == !window.IsActive && window.chatMessages.Items.Count == 1,
+                "Wide chat opens beside members and clears the unread dot when the window is active");
+            window.chatInput.Text = "还没发送的草稿";
+            ToggleChat();
+            Check(!window.chatPanel.IsVisible && window.chatColumn.Width.Value == 0 && window.membersCard.IsVisible &&
+                  window.chatInput.Text == "还没发送的草稿", "Collapsing chat restores member width and keeps the current draft");
             window.eye.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.invite.Text == room.Invite, "Reveal");
             window.eye.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -133,6 +153,11 @@ internal static class WindowChecks
             window.togglePage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             window.Width = window.MinWidth;
             window.Height = window.MinHeight;
+            Layout();
+            ToggleChat();
+            Check(window.chatPanel.IsVisible && !window.membersCard.IsVisible && Grid.GetColumn(window.chatPanel) == 0 &&
+                  window.chatMessages.Items.Count == 1, "Narrow chat temporarily uses the member area and keeps the room messages");
+            ToggleChat();
             foreach (int count in new[] { 20, 19, 20 }) Roster(count);
             var table = window.members.table;
             var scroll = FindScroll(table) ?? throw new InvalidOperationException("Missing roster viewport");
@@ -143,13 +168,15 @@ internal static class WindowChecks
                   window.updateButton.IsVisible && window.status.ActualWidth >= 80 && scroll.VerticalOffset > 0,
                   "Fixed guide and footer at minimum size");
             window.SetRoom(null);
+            Check(!window.chatAction.IsVisible && window.chatMessages.Items.Count == 0 && window.chatInput.Text.Length == 0,
+                "Leaving a room clears chat history and draft");
             CheckGameMenu();
             window.Close();
             var reopened = new Lobby();
             Check(reopened.darkMode.IsChecked == true, "Saved appearance");
             reopened.Close();
             Console.WriteLine($"Screenshots saved to {Path.GetFullPath(outputDirectory)}");
-            Console.WriteLine("WPF window, themes, invites, diagnostics and 20-member scrolling passed.");
+            Console.WriteLine("WPF window, themes, invites, room chat, diagnostics and 20-member scrolling passed.");
         }
         finally
         {

@@ -61,12 +61,28 @@
                     </Grid>
                 </Button>
                 <TextBlock x:Name="roomState" Text="●  未加入房间" Margin="24,0,0,0" Style="{StaticResource Secondary}" FontWeight="SemiBold"/>
-                <Button x:Name="leave" DockPanel.Dock="Right" VerticalAlignment="Center" AutomationProperties.Name="离开房间" ToolTip="离开房间">
-                    <StackPanel Orientation="Horizontal">
-                        <ui:Glyph Kind="leave" Width="16" Height="16"/>
-                        <TextBlock Text="离开房间" Margin="7,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Grid x:Name="chatAction" Margin="0,0,8,0" Visibility="Collapsed">
+                        <Button x:Name="chatToggle" AutomationProperties.Name="房间聊天">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="房间聊天" VerticalAlignment="Center"/>
+                                <ui:Glyph Kind="chevron" Width="13" Height="13" Margin="7,0,0,0" RenderTransformOrigin="0.5,0.5">
+                                    <ui:Glyph.RenderTransform>
+                                        <RotateTransform x:Name="chatChevron"/>
+                                    </ui:Glyph.RenderTransform>
+                                </ui:Glyph>
+                            </StackPanel>
+                        </Button>
+                        <Ellipse x:Name="chatUnreadDot" Width="8" Height="8" Fill="#DF4256" Margin="3"
+                                 HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False" Visibility="Collapsed"/>
+                    </Grid>
+                    <Button x:Name="leave" AutomationProperties.Name="离开房间" ToolTip="离开房间">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:Glyph Kind="leave" Width="16" Height="16"/>
+                            <TextBlock Text="离开房间" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
             </DockPanel>
             <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,14,0,12" Padding="20,14">
                 <Grid>
@@ -113,42 +129,104 @@
                     </Button>
                 </Grid>
             </Border>
-            <Border Grid.Row="2" Style="{StaticResource Card}">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="49"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    <DockPanel Margin="22,0" LastChildFill="False">
-                        <TextBlock Text="房间成员" Style="{StaticResource Heading}"/>
-                        <Border Background="{DynamicResource Tint}" CornerRadius="14" Padding="12,3" VerticalAlignment="Center" Margin="14,0">
-                            <TextBlock x:Name="countBadge" Text="0 人" Foreground="{DynamicResource Accent}" FontSize="13" FontWeight="SemiBold"/>
-                        </Border>
-                        <Button x:Name="inspect" Style="{StaticResource Quiet}" DockPanel.Dock="Right" VerticalAlignment="Center" AutomationProperties.Name="刷新" ToolTip="刷新">
-                            <StackPanel Orientation="Horizontal">
-                                <ui:Glyph Kind="refresh" Width="14" Height="14"/>
-                                <TextBlock Text="刷新" Margin="7,0,0,0" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-                    </DockPanel>
-                    <ui:PeerTable x:Name="members" Grid.Row="1" Margin="0,0,0,6" AutomationProperties.Name="房间成员"/>
-                    <StackPanel x:Name="emptyState" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="12,0,12,16">
-                        <Border Width="82" Height="82" CornerRadius="24" Background="{DynamicResource Tint}" HorizontalAlignment="Center">
-                            <ui:Glyph Kind="people" Width="38" Height="38" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center"/>
-                        </Border>
-                        <TextBlock x:Name="emptyTitle" Text="等待加入房间" Style="{StaticResource Heading}" HorizontalAlignment="Center" Margin="0,16,0,10"/>
-                        <TextBlock x:Name="memberStatus" Style="{StaticResource Secondary}" HorizontalAlignment="Center"/>
-                    </StackPanel>
-                    <Border x:Name="guideBar" Grid.Row="2" Padding="0,10" Margin="22,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Rule}">
-                        <DockPanel>
-                            <ui:Glyph Kind="book" Width="14" Height="14" Foreground="{DynamicResource Muted}"/>
-                            <TextBlock x:Name="guideTitle" Style="{StaticResource Secondary}" FontWeight="SemiBold" Margin="9,0,18,0"/>
-                            <TextBlock x:Name="guide" Style="{StaticResource Secondary}" TextTrimming="CharacterEllipsis"/>
+            <Grid x:Name="roomContent" Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition x:Name="chatColumn" Width="0"/>
+                </Grid.ColumnDefinitions>
+                <Border x:Name="membersCard" Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="49"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <DockPanel Margin="22,0" LastChildFill="False">
+                            <TextBlock Text="房间成员" Style="{StaticResource Heading}"/>
+                            <Border Background="{DynamicResource Tint}" CornerRadius="14" Padding="12,3" VerticalAlignment="Center" Margin="14,0">
+                                <TextBlock x:Name="countBadge" Text="0 人" Foreground="{DynamicResource Accent}" FontSize="13" FontWeight="SemiBold"/>
+                            </Border>
+                            <Button x:Name="inspect" Style="{StaticResource Quiet}" DockPanel.Dock="Right" VerticalAlignment="Center" AutomationProperties.Name="刷新" ToolTip="刷新">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:Glyph Kind="refresh" Width="14" Height="14"/>
+                                    <TextBlock Text="刷新" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </DockPanel>
-                    </Border>
-                </Grid>
-            </Border>
+                        <ui:PeerTable x:Name="members" Grid.Row="1" Margin="0,0,0,6" AutomationProperties.Name="房间成员"/>
+                        <StackPanel x:Name="emptyState" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="12,0,12,16">
+                            <Border Width="82" Height="82" CornerRadius="24" Background="{DynamicResource Tint}" HorizontalAlignment="Center">
+                                <ui:Glyph Kind="people" Width="38" Height="38" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center"/>
+                            </Border>
+                            <TextBlock x:Name="emptyTitle" Text="等待加入房间" Style="{StaticResource Heading}" HorizontalAlignment="Center" Margin="0,16,0,10"/>
+                            <TextBlock x:Name="memberStatus" Style="{StaticResource Secondary}" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                        <Border x:Name="guideBar" Grid.Row="2" Padding="0,10" Margin="22,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Rule}">
+                            <DockPanel>
+                                <ui:Glyph Kind="book" Width="14" Height="14" Foreground="{DynamicResource Muted}"/>
+                                <TextBlock x:Name="guideTitle" Style="{StaticResource Secondary}" FontWeight="SemiBold" Margin="9,0,18,0"/>
+                                <TextBlock x:Name="guide" Style="{StaticResource Secondary}" TextTrimming="CharacterEllipsis"/>
+                            </DockPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+                <Border x:Name="chatPanel" Style="{StaticResource Card}" BorderBrush="{DynamicResource Accent}" Visibility="Collapsed">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="49"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Border Padding="18,0" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Rule}">
+                            <DockPanel>
+                                <TextBlock Text="房间聊天" Style="{StaticResource Heading}" Margin="0,0,12,0"/>
+                                <TextBlock x:Name="chatStatus" Style="{StaticResource Secondary}" HorizontalAlignment="Right"
+                                           TextAlignment="Right" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                                           AutomationProperties.LiveSetting="Polite"/>
+                            </DockPanel>
+                        </Border>
+                        <ScrollViewer x:Name="chatScroll" Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto" AutomationProperties.Name="聊天消息">
+                            <ItemsControl x:Name="chatMessages" Margin="14,14,14,2">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel x:Name="messageStack" Margin="0,0,24,12" HorizontalAlignment="Left">
+                                            <TextBlock Text="{Binding Header}" ToolTip="{Binding Header}" TextTrimming="CharacterEllipsis"
+                                                       Style="{StaticResource Secondary}" FontSize="12" Margin="0,0,0,4"/>
+                                            <Border x:Name="messageBubble" CornerRadius="8" Padding="9,6" Background="{DynamicResource Field}">
+                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Own}" Value="True">
+                                                <Setter TargetName="messageStack" Property="HorizontalAlignment" Value="Right"/>
+                                                <Setter TargetName="messageStack" Property="Margin" Value="24,0,0,12"/>
+                                                <Setter TargetName="messageBubble" Property="Background" Value="{DynamicResource Tint}"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <TextBlock x:Name="chatEmpty" Grid.Row="1" Text="还没有消息" Style="{StaticResource Secondary}"
+                                   HorizontalAlignment="Center" IsHitTestVisible="False"/>
+                        <Border Grid.Row="2" Padding="12,10" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Rule}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="chatInput" Height="36" AutomationProperties.Name="输入聊天消息" IsUndoEnabled="False"/>
+                                <TextBlock x:Name="chatInputHint" Text="输入消息…" Style="{StaticResource Secondary}"
+                                           IsHitTestVisible="False" Margin="11,0,0,0"/>
+                                <Button x:Name="chatSend" Grid.Column="1" Content="发送" Margin="8,0,0,0"
+                                        Style="{StaticResource Primary}" AutomationProperties.Name="发送聊天消息"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
         </Grid>
         <Grid x:Name="diagnosticsPage" Grid.Row="1" Margin="32,16,32,14" Visibility="Collapsed">
             <Grid.RowDefinitions>
