@@ -186,17 +186,47 @@
                                            AutomationProperties.LiveSetting="Polite"/>
                             </DockPanel>
                         </Border>
-                        <ScrollViewer x:Name="chatScroll" Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
-                                      VerticalScrollBarVisibility="Auto" AutomationProperties.Name="聊天消息">
-                            <ItemsControl x:Name="chatMessages" Margin="14,14,14,2">
+                        <ScrollViewer x:Name="chatScroll" Grid.Row="1" Style="{StaticResource ChatHistoryScroll}"
+                                      AutomationProperties.Name="聊天消息">
+                            <ItemsControl x:Name="chatMessages" Margin="14,14,2,2">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <StackPanel x:Name="messageStack" Margin="0,0,24,12" HorizontalAlignment="Left">
-                                            <TextBlock Text="{Binding Header}" ToolTip="{Binding Header}" TextTrimming="CharacterEllipsis"
-                                                       Style="{StaticResource Secondary}" FontSize="12" Margin="0,0,0,4"/>
+                                            <DockPanel Margin="0,0,0,4">
+                                                <Button x:Name="copyMessage" DockPanel.Dock="Right" Width="26" Height="22"
+                                                        MinHeight="0" Padding="0" IsTabStop="False" Click="CopyChatMessage"
+                                                        ToolTip="复制消息" ToolTipService.ShowsToolTipOnKeyboardFocus="True"
+                                                        AutomationProperties.Name="复制消息" AutomationProperties.LiveSetting="Polite">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button" BasedOn="{StaticResource Quiet}">
+                                                            <Style.Triggers>
+                                                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                                                </Trigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                    <ui:Glyph x:Name="copyMessageIcon" Kind="copy" Width="15" Height="15"/>
+                                                </Button>
+                                                <TextBlock Text="{Binding Header}" ToolTip="{Binding Header}" TextTrimming="CharacterEllipsis"
+                                                           Style="{StaticResource Secondary}" FontSize="12"/>
+                                            </DockPanel>
                                             <Border x:Name="messageBubble" CornerRadius="8" Padding="9,6" Background="{DynamicResource Field}">
-                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                                                <TextBox x:Name="messageBody" Text="{Binding Text, Mode=OneWay}"
+                                                         Style="{StaticResource ChatMessageBody}"/>
                                             </Border>
+                                            <TextBlock x:Name="deliveryStatus" Text="{Binding Delivery}" FontSize="12"
+                                                       HorizontalAlignment="Right" Margin="0,4,0,0" AutomationProperties.LiveSetting="Polite">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Secondary}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Delivery}" Value="">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                         </StackPanel>
                                         <DataTemplate.Triggers>
                                             <DataTrigger Binding="{Binding Own}" Value="True">

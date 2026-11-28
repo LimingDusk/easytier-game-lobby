@@ -1,6 +1,9 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -134,6 +137,41 @@ internal static class WindowChecks
             Check(window.chatPanel.IsVisible && window.membersCard.IsVisible && Grid.GetColumn(window.chatPanel) == 1 &&
                   window.chatUnreadDot.IsVisible == !window.IsActive && window.chatMessages.Items.Count == 1,
                 "Wide chat opens beside members and clears the unread dot when the window is active");
+
+            window.SetChatStatus("房间里只有你", true);
+            foreach (string message in new[] { "只有我也能发消息。", "现在可以继续输入。" })
+            {
+                int index = window.chatMessages.Items.Count;
+                window.chatInput.Text = message;
+                Check(window.chatSend.IsEnabled, "Solo chat accepts consecutive submissions");
+                window.chatSend.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(window.chatInput.Text.Length == 0 && window.chatMessages.Items.Count == index + 1,
+                    "A solo send immediately adds the message and clears the composer");
+                Layout();
+                Check(ChatItem<TextBox>(window, index, "messageBody").Text == message &&
+                      ChatItem<TextBlock>(window, index, "deliveryStatus").Text == "仅自己可见",
+                    "A solo message appears in the conversation with a local-only label");
+            }
+            var body = ChatItem<TextBox>(window, 0, "messageBody");
+            body.Select(0, 4);
+            Check(body.IsReadOnly && body.TextWrapping == TextWrapping.Wrap && body.SelectedText == "可以进游" &&
+                  ApplicationCommands.Copy.CanExecute(null, body),
+                "The message can be partially selected and copied in a read-only wrapping bubble");
+            var lightCopy = CheckChatCopy(window);
+            double viewport = window.chatScroll.ViewportWidth;
+            for (int i = 0; i < 16; i++)
+                window.ShowChatMessage(new ChatMessage("Ming-PC", $"滚动预览消息 {i + 1}", DateTimeOffset.Now), own: false);
+            Layout();
+            var lightThumb = CheckChatRail(window, viewport);
+            Capture("05-room-chat-light");
+            window.darkMode.IsChecked = true;
+            Layout();
+            Check(CheckChatRail(window, viewport) != lightThumb, "The thin chat thumb follows the lobby theme");
+            Check(CheckChatCopy(window) != lightCopy, "The copy SVG follows the lobby theme");
+            Capture("06-room-chat-dark");
+            window.lightMode.IsChecked = true;
+            int chatCount = window.chatMessages.Items.Count;
+
             window.chatInput.Text = "还没发送的草稿";
             ToggleChat();
             Check(!window.chatPanel.IsVisible && window.chatColumn.Width.Value == 0 && window.membersCard.IsVisible &&
@@ -156,7 +194,7 @@ internal static class WindowChecks
             Layout();
             ToggleChat();
             Check(window.chatPanel.IsVisible && !window.membersCard.IsVisible && Grid.GetColumn(window.chatPanel) == 0 &&
-                  window.chatMessages.Items.Count == 1, "Narrow chat temporarily uses the member area and keeps the room messages");
+                  window.chatMessages.Items.Count == chatCount, "Narrow chat temporarily uses the member area and keeps the room messages");
             ToggleChat();
             foreach (int count in new[] { 20, 19, 20 }) Roster(count);
             var table = window.members.table;
@@ -184,6 +222,40 @@ internal static class WindowChecks
             else preferences.SetValue("Appearance", saved);
             app.Shutdown();
         }
+    }
+
+    private static T ChatItem<T>(Lobby window, int index, string name) where T : FrameworkElement
+    {
+        var container = (ContentPresenter)window.chatMessages.ItemContainerGenerator.ContainerFromIndex(index)!;
+        return (T)window.chatMessages.ItemTemplate.FindName(name, container);
+    }
+
+    private static Color CheckChatCopy(Lobby window)
+    {
+        var button = ChatItem<Button>(window, 0, "copyMessage");
+        Check(button.IsEnabled && AutomationProperties.GetName(button) == "复制消息" && Equals(button.ToolTip, "复制消息"),
+            "The icon-only copy button has an accessible name and tooltip");
+        if (button.Content is not Glyph { Kind: "copy", Foreground: SolidColorBrush color })
+            throw new InvalidOperationException("The copy button uses the existing SVG copy glyph");
+        Check(color.Color == ((SolidColorBrush)button.Foreground).Color,
+            "The copy icon follows the themed button foreground");
+        return color.Color;
+    }
+
+    private static Color CheckChatRail(Lobby window, double viewport)
+    {
+        var scroll = window.chatScroll;
+        var rail = (ScrollBar)scroll.Template.FindName("PART_VerticalScrollBar", scroll);
+        var track = (Track)rail.Template.FindName("PART_Track", rail);
+        var thumb = track.Thumb;
+        var mark = (Border)thumb.Template.FindName("thumbMark", thumb);
+        var color = ((SolidColorBrush)mark.Background).Color;
+        string brush = thumb.IsMouseOver || thumb.IsDragging ? "Accent" : "ChatScrollThumb";
+        Check(scroll.ScrollableHeight > 0 && rail.IsVisible && mark.IsVisible &&
+              Math.Abs(rail.ActualWidth - 12) < 1 && Math.Abs(mark.ActualWidth - 6) < 1 &&
+              Math.Abs(scroll.ViewportWidth - viewport) < 1 && color == ((SolidColorBrush)window.FindResource(brush)).Color,
+            "The chat scrollbar has a slim theme-colored thumb and keeps the conversation width stable");
+        return color;
     }
 
     private static ScrollViewer? FindScroll(DependencyObject parent)

@@ -6,6 +6,8 @@ namespace GameLobby;
 
 public partial class Lobby
 {
+    private sealed record ChatSubmission(ChatMessage Message, int Recipients, Task<int> Delivery);
+
     private RoomChat? roomChat;
     private IPAddress? chatAddress;
     private string chatName = "";
@@ -47,14 +49,23 @@ public partial class Lobby
             RoomChat? connection = null;
             try
             {
-                connection = new RoomChat(address, room.Secret, message =>
-                {
-                    _ = Dispatcher.InvokeAsync(() =>
+                connection = new RoomChat(address, room.Secret,
+                    message =>
                     {
-                        if (current == generation && connection != null && ReferenceEquals(roomChat, connection))
-                            ShowChatMessage(message, false);
+                        _ = Dispatcher.InvokeAsync(() =>
+                        {
+                            if (current == generation && connection != null && ReferenceEquals(roomChat, connection))
+                                ShowChatMessage(message, false);
+                        });
+                    },
+                    refreshPeers: () =>
+                    {
+                        _ = Dispatcher.InvokeAsync(() =>
+                        {
+                            if (current == generation && connection != null && ReferenceEquals(roomChat, connection))
+                                _ = RunActionAsync(RefreshPeers, "刷新房间成员失败");
+                        });
                     });
-                });
             }
             catch (SocketException)
             {
@@ -70,7 +81,7 @@ public partial class Lobby
         roomChat!.UpdatePeers(peers);
         if (chatPeerCount == peers.Count) return;
         chatPeerCount = peers.Count;
-        SetChatStatus(chatPeerCount > 0 ? "可向房间成员发送消息" : "正在等待队友加入房间…", chatPeerCount > 0);
+        SetChatStatus(chatPeerCount > 0 ? "可向房间成员发送消息" : "房间里只有你", true);
     }
 
     private static IPAddress? ParseChatAddress(string? text) =>
@@ -78,23 +89,13 @@ public partial class Lobby
         !address.Equals(IPAddress.Any) && !address.Equals(IPAddress.Broadcast) && !IPAddress.IsLoopback(address)
             ? address : null;
 
-    private async Task<bool> SendChatAsync(string text)
+    private ChatSubmission? SubmitChat(string text)
     {
-        if (roomChat is not { } connection || chatPeerCount < 1) return false;
+        if (currentRoom == null) return null;
+        var connection = roomChat;
         int recipients = chatPeerCount;
-        var message = new ChatMessage(chatName, text, DateTimeOffset.Now);
-        int delivered = await connection.SendAsync(text);
-        if (!ReferenceEquals(roomChat, connection)) return false;
-        bool canSend = chatPeerCount > 0;
-        if (delivered == 0)
-        {
-            SetChatStatus("发送未获确认，请确认队友已更新并连接后重试。", canSend);
-            return false;
-        }
-
-        ShowChatMessage(message, true);
-        SetChatStatus($"已送达 {delivered}/{recipients} 位队友", canSend);
-        return true;
+        var message = new ChatMessage(chatName.Length == 0 ? "本机" : chatName, text, DateTimeOffset.Now);
+        return new(message, recipients, connection != null && recipients > 0 ? connection.SendAsync(text) : Task.FromResult(0));
     }
 
     private void CloseChatConnection()

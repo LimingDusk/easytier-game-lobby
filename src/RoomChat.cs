@@ -15,6 +15,7 @@ internal sealed class RoomChat : IAsyncDisposable
 
     private const int MaxMessageBytes = 3 * MaxMessageLength;
     private const int WorkerCount = 8;
+    private const int MaxQueuedPerPeer = 32;
     private const int NonceLength = 32;
     private const int ProofLength = 32;
     // One TCP exchange carries a hello, a listener proof, a signed text frame, and a delivery proof.
@@ -25,22 +26,40 @@ internal sealed class RoomChat : IAsyncDisposable
 
     private sealed record PeerSnapshot(IReadOnlyDictionary<IPAddress, string> Members)
     {
+        private int refreshRequested;
+
         public TaskCompletionSource Updated { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool RequestRefresh() => Interlocked.Exchange(ref refreshRequested, 1) == 0;
+    }
+
+    private sealed record Delivery(byte[] Payload)
+    {
+        public TaskCompletionSource<bool> Acknowledged { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class PeerOutbox
+    {
+        public Queue<Delivery> Pending { get; } = new();
+        public Task Worker { get; set; } = Task.CompletedTask;
     }
 
     private readonly IPAddress localAddress;
     private readonly int port;
     private readonly byte[] key;
     private readonly Action<ChatMessage> received;
+    private readonly Action? refreshPeers;
     private readonly TcpListener listener;
     private readonly CancellationTokenSource shutdown = new();
     private readonly Task[] workers;
     private readonly object lifetime = new();
+    private readonly SemaphoreSlim sendSlots = new(WorkerCount);
+    private readonly Dictionary<IPAddress, PeerOutbox> outboxes = new();
     private readonly HashSet<Task<int>> sends = [];
     private PeerSnapshot peers = new(new Dictionary<IPAddress, string>());
     private Task? disposal;
 
-    public RoomChat(IPAddress localAddress, string roomSecret, Action<ChatMessage> received, int port = DefaultPort)
+    public RoomChat(IPAddress localAddress, string roomSecret, Action<ChatMessage> received, int port = DefaultPort,
+        Action? refreshPeers = null)
     {
         if (!IsPeerAddress(localAddress)) throw new ArgumentException("聊天需要本机虚拟 IPv4 地址。", nameof(localAddress));
         ArgumentOutOfRangeException.ThrowIfLessThan(port, 1);
@@ -51,6 +70,7 @@ internal sealed class RoomChat : IAsyncDisposable
         this.localAddress = localAddress;
         this.port = port;
         this.received = received;
+        this.refreshPeers = refreshPeers;
         key = HMACSHA256.HashData(Encoding.UTF8.GetBytes(roomSecret), "EasyTier Game Lobby chat v1"u8);
         listener = new TcpListener(localAddress, port);
         listener.Start(2 * WorkerCount);
@@ -62,7 +82,14 @@ internal sealed class RoomChat : IAsyncDisposable
     {
         var members = eligiblePeers.Where(peer => IsPeerAddress(peer.Key) && !peer.Key.Equals(localAddress))
             .ToDictionary(peer => peer.Key, peer => peer.Value);
-        Interlocked.Exchange(ref peers, new PeerSnapshot(members)).Updated.TrySetResult();
+        lock (lifetime)
+        {
+            if (disposal != null) return;
+            Interlocked.Exchange(ref peers, new PeerSnapshot(members)).Updated.TrySetResult();
+            foreach (var (address, outbox) in outboxes)
+                if (!members.ContainsKey(address))
+                    while (outbox.Pending.TryDequeue(out var dropped)) dropped.Acknowledged.TrySetResult(false);
+        }
     }
 
     public Task<int> SendAsync(string text)
@@ -78,7 +105,24 @@ internal sealed class RoomChat : IAsyncDisposable
             var members = Volatile.Read(ref peers).Members;
             if (disposal != null || members.Count == 0) return Task.FromResult(0);
 
-            var send = SendToPeersAsync(members.Keys, payload, shutdown.Token);
+            CancellationToken stopping = shutdown.Token;
+            var deliveries = new List<Task<bool>>(members.Count);
+            foreach (var address in members.Keys)
+            {
+                if (!outboxes.TryGetValue(address, out var outbox))
+                {
+                    outbox = new PeerOutbox();
+                    outboxes.Add(address, outbox);
+                    outbox.Worker = Task.Run(() => SendQueuedAsync(address, outbox, stopping));
+                }
+                if (outbox.Pending.Count >= MaxQueuedPerPeer) continue;
+
+                var delivery = new Delivery(payload);
+                outbox.Pending.Enqueue(delivery);
+                deliveries.Add(delivery.Acknowledged.Task);
+            }
+
+            var send = CountAcknowledgmentsAsync(deliveries);
             sends.Add(send);
             _ = send.ContinueWith(finished =>
             {
@@ -88,22 +132,39 @@ internal sealed class RoomChat : IAsyncDisposable
         }
     }
 
-    private async Task<int> SendToPeersAsync(IEnumerable<IPAddress> addresses, byte[] payload, CancellationToken stopping)
+    private static async Task<int> CountAcknowledgmentsAsync(List<Task<bool>> deliveries) =>
+        (await Task.WhenAll(deliveries).ConfigureAwait(false)).Count(acknowledged => acknowledged);
+
+    private async Task SendQueuedAsync(IPAddress address, PeerOutbox outbox, CancellationToken stopping)
     {
-        int delivered = 0;
-        try
+        while (true)
         {
-            await Parallel.ForEachAsync(addresses, new ParallelOptions
+            Delivery delivery;
+            lock (lifetime)
             {
-                CancellationToken = stopping,
-                MaxDegreeOfParallelism = WorkerCount
-            }, async (address, token) =>
+                if (!outbox.Pending.TryDequeue(out var next))
+                {
+                    outboxes.Remove(address);
+                    return;
+                }
+                delivery = next;
+            }
+
+            try
             {
-                if (await TrySendAsync(address, payload, token).ConfigureAwait(false)) Interlocked.Increment(ref delivered);
-            }).ConfigureAwait(false);
+                await sendSlots.WaitAsync(stopping).ConfigureAwait(false);
+                try
+                {
+                    bool acknowledged = Volatile.Read(ref peers).Members.ContainsKey(address) &&
+                        await TrySendAsync(address, delivery.Payload, stopping).ConfigureAwait(false);
+                    delivery.Acknowledged.TrySetResult(acknowledged);
+                }
+                finally { sendSlots.Release(); }
+            }
+            catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+            { delivery.Acknowledged.TrySetResult(false); }
+            catch (Exception error) { delivery.Acknowledged.TrySetException(error); }
         }
-        catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
-        return delivered;
     }
 
     private async Task<bool> TrySendAsync(IPAddress address, byte[] payload, CancellationToken stopping)
@@ -201,10 +262,17 @@ internal sealed class RoomChat : IAsyncDisposable
     {
         // Peer discovery runs independently on each client. Only an authenticated sender
         // can wait for the next snapshot to confirm its source address.
+        bool requested = false;
         while (true)
         {
             var snapshot = Volatile.Read(ref peers);
             if (snapshot.Members.TryGetValue(address, out string? name)) return name;
+            if (!requested && refreshPeers is not null)
+            {
+                token.ThrowIfCancellationRequested();
+                requested = true;
+                if (snapshot.RequestRefresh()) refreshPeers();
+            }
             await snapshot.Updated.Task.WaitAsync(token).ConfigureAwait(false);
         }
     }
@@ -250,7 +318,7 @@ internal sealed class RoomChat : IAsyncDisposable
             {
                 shutdown.Cancel();
                 listener.Stop();
-                disposal = FinishAsync(Task.WhenAll(workers.Concat(sends)));
+                disposal = FinishAsync(Task.WhenAll(workers.Concat(outboxes.Values.Select(outbox => outbox.Worker)).Concat(sends)));
             }
             return new ValueTask(disposal);
         }
@@ -262,6 +330,7 @@ internal sealed class RoomChat : IAsyncDisposable
         finally
         {
             shutdown.Dispose();
+            sendSlots.Dispose();
             CryptographicOperations.ZeroMemory(key);
         }
     }

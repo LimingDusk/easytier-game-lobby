@@ -11,4 +11,5 @@
     <SolidColorBrush x:Key="Tint" Color="#263B60"/>
     <SolidColorBrush x:Key="Green" Color="#63D4A4"/>
     <SolidColorBrush x:Key="Rule" Color="#303E53"/>
+    <SolidColorBrush x:Key="ChatScrollThumb" Color="#8A9DB9"/>
 </ResourceDictionary>
