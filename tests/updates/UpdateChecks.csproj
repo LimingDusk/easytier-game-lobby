@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="../../src/Updates/ReleaseVersion.cs"/>
     <Compile Include="../../src/Updates/GitHubUpdates.cs"/>
+    <Compile Include="../../src/Updates/UpdateBlockManifest.cs"/>
   </ItemGroup>
 </Project>

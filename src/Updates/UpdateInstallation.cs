@@ -8,6 +8,8 @@ namespace GameLobby;
 
 internal sealed class UpdateInstallation
 {
+    private sealed record InstalledUpdate(string Directory, UpdatePackage Package, ReleaseVersion Version, DateTime Completed);
+
     private readonly string programFiles;
     private readonly string root;
     private readonly string directory;
@@ -46,33 +48,56 @@ internal sealed class UpdateInstallation
     {
         try
         {
-            if (!Directory.Exists(directory)) return null;
-            EnsureDirectories(create: false);
-            var package = ReadReceipt();
-            if (package is null || !IsNewer(package) ||
-                string.Equals(PackagePath(package), executable, StringComparison.OrdinalIgnoreCase))
-                return null;
-            return LaunchVerified(package);
+            if (!Directory.Exists(root)) return null;
+            EnsureRoot(create: false);
+            var candidates = Directory.EnumerateDirectories(root)
+                .Where(path => UpdatePackage.ValidDigest(Path.GetFileName(path)))
+                .Select(ReadInstalledUpdate)
+                .OfType<InstalledUpdate>()
+                .OrderByDescending(update => update.Version)
+                .ThenByDescending(update => string.Equals(update.Directory, directory, StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(update => update.Completed);
+            foreach (var update in candidates)
+            {
+                try { return LaunchVerified(update.Directory, update.Package); }
+                catch (Exception error) when (IsStartupUpdateFailure(error)) { }
+            }
         }
-        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or
-            Win32Exception or InvalidOperationException)
-        {
-            return null;
-        }
+        catch (Exception error) when (IsStartupUpdateFailure(error)) { }
+        return null;
     }
+
+    private InstalledUpdate? ReadInstalledUpdate(string path)
+    {
+        try
+        {
+            UpdateFiles.DirectoryAt(path, create: false);
+            string completedReceipt = Path.Combine(path, "installed.json");
+            if (ReadReceipt(completedReceipt) is not { } package) return null;
+            var version = GetVersion(package);
+            if (!IsNewer(version) || string.Equals(PackagePath(path, package), executable, StringComparison.OrdinalIgnoreCase))
+                return null;
+            return new(path, package, version, File.GetLastWriteTimeUtc(completedReceipt));
+        }
+        catch (Exception error) when (IsStartupUpdateFailure(error)) { return null; }
+    }
+
+    private static bool IsStartupUpdateFailure(Exception error) => error is IOException or InvalidDataException or
+        UnauthorizedAccessException or Win32Exception or InvalidOperationException;
 
     internal async Task<int> ApplyAsync(GitHubUpdates source, UpdatePackage package, IProgress<UpdateProgress>? progress,
         CancellationToken cancellationToken)
     {
-        if (!package.IsValid() || !IsNewer(package))
+        if (!package.IsValid() || !IsNewer(GetVersion(package)))
             throw new InvalidDataException("更新包版本无效。");
-        EnsureDirectories(create: true);
+        EnsureRoot(create: true);
+        UpdateFiles.DirectoryAt(directory, create: true);
         using var updateLock = UpdateFiles.CreateFile(Path.Combine(directory, "update.lock"), FileMode.OpenOrCreate);
-        if (ReadReceipt() is { } installed && IsNewer(installed) &&
+        if (ReadReceipt(receipt) is { } installed && IsNewer(GetVersion(installed)) &&
             GetVersion(installed).CompareTo(GetVersion(package)) > 0)
             package = installed;
 
-        string executablePath = PackagePath(package);
+        string executablePath = PackagePath(directory, package);
         string packageDirectory = Path.GetDirectoryName(executablePath)!;
         UpdateFiles.DirectoryAt(packageDirectory, create: true);
         string download = Path.Combine(packageDirectory, "package.download");
@@ -84,7 +109,7 @@ internal sealed class UpdateInstallation
                 try
                 {
                     using var file = UpdateFiles.CreateFile(download, FileMode.OpenOrCreate);
-                    await source.DownloadAsync(package, file, progress, cancellationToken).ConfigureAwait(false);
+                    await source.DownloadAsync(package, file, progress, cancellationToken, executable).ConfigureAwait(false);
                     file.Flush(flushToDisk: true);
                 }
                 catch (InvalidDataException) { TryDelete(download); throw; }
@@ -93,12 +118,12 @@ internal sealed class UpdateInstallation
 
             using (var record = UpdateFiles.CreateFile(pending, FileMode.CreateNew))
             {
-                JsonSerializer.Serialize(record, package);
+                JsonSerializer.Serialize(record, new { package.Tag, package.Size, package.Sha256 });
                 record.Flush(flushToDisk: true);
             }
             cancellationToken.ThrowIfCancellationRequested();
             progress?.Report(new(UpdatePhase.Starting));
-            using var child = LaunchVerified(package, cancellationToken);
+            using var child = LaunchVerified(directory, package, cancellationToken);
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -110,20 +135,19 @@ internal sealed class UpdateInstallation
         finally { TryDelete(pending); }
     }
 
-    private void EnsureDirectories(bool create)
+    private void EnsureRoot(bool create)
     {
         for (var ancestor = new DirectoryInfo(programFiles); ancestor != null; ancestor = ancestor.Parent)
             if ((ancestor.Attributes & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Program Files 路径使用了重解析点。");
         UpdateFiles.DirectoryAt(root, create);
-        UpdateFiles.DirectoryAt(directory, create);
     }
 
-    private UpdatePackage? ReadReceipt()
+    private static UpdatePackage? ReadReceipt(string path)
     {
-        if (!File.Exists(receipt)) return null;
-        UpdateFiles.VerifyFile(receipt);
-        using var file = File.Open(receipt, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+        if (!File.Exists(path)) return null;
+        UpdateFiles.VerifyFile(path);
+        using var file = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
         if (file.Length > 4096) return null;
         try
         {
@@ -133,9 +157,9 @@ internal sealed class UpdateInstallation
         catch (JsonException) { return null; }
     }
 
-    private Process LaunchVerified(UpdatePackage package, CancellationToken cancellationToken = default)
+    private Process LaunchVerified(string installDirectory, UpdatePackage package, CancellationToken cancellationToken = default)
     {
-        string path = PackagePath(package);
+        string path = PackagePath(installDirectory, package);
         string folder = Path.GetDirectoryName(path)!;
         UpdateFiles.DirectoryAt(folder, create: false);
         UpdateFiles.VerifyFile(path);
@@ -165,14 +189,11 @@ internal sealed class UpdateInstallation
         ReleaseVersion.TryParse(package.Tag, out var version) ? version :
         throw new InvalidDataException("更新包版本无效。");
 
-    private bool IsNewer(UpdatePackage package)
-    {
-        var version = GetVersion(package);
-        return version.CompareTo(Current) > 0 && (Current.IsPrerelease || !version.IsPrerelease);
-    }
+    private bool IsNewer(ReleaseVersion version) =>
+        version.CompareTo(Current) > 0 && (Current.IsPrerelease || !version.IsPrerelease);
 
-    private string PackagePath(UpdatePackage package) =>
-        Path.Combine(directory, package.Sha256.ToUpperInvariant(), GitHubUpdates.AssetName);
+    private static string PackagePath(string installDirectory, UpdatePackage package) =>
+        Path.Combine(installDirectory, package.Sha256.ToUpperInvariant(), GitHubUpdates.AssetName);
 
     private static void TryDelete(string path)
     {

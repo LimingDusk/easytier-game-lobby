@@ -40,10 +40,23 @@ jobs:
           & (Join-Path $core.DirectoryName 'easytier-cli.exe') peer --help
           if ($LASTEXITCODE) { throw 'Missing peer diagnostics' }
       - run: dotnet run --project tests/window/WindowChecks.csproj -- --update-package dist/GameLobby-win-x64.exe
+      - name: Generate update manifest
+        shell: pwsh
+        run: |
+          $version = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path dist/GameLobby-win-x64.exe)).ProductVersion
+          $tag = "v$version"
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne $tag) {
+            throw "The release tag does not match the executable product version."
+          }
+          dotnet run --project scripts/update-manifest/UpdateManifest.csproj -- dist/GameLobby-win-x64.exe "$tag" dist/GameLobby-win-x64.blocks.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: GameLobby-win-x64
-          path: dist/GameLobby-win-x64.exe
+          path: |
+            dist/GameLobby-win-x64.exe
+            dist/GameLobby-win-x64.blocks.json
+          if-no-files-found: error
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
@@ -66,4 +79,4 @@ jobs:
           elif [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.0$ ]]; then
             title="${tag%.0}"
           fi
-          gh release create "$tag" GameLobby-win-x64.exe --repo "$GITHUB_REPOSITORY" --title "$title" "${flags[@]}"
+          gh release create "$tag" GameLobby-win-x64.exe GameLobby-win-x64.blocks.json --repo "$GITHUB_REPOSITORY" --title "$title" "${flags[@]}"

@@ -110,8 +110,10 @@ public partial class Lobby
             status.Text = update.Phase switch
             {
                 UpdatePhase.Retrying => $"下载中断，正在重试 {update.Retry}/{GitHubUpdates.DownloadRetries}（{update.Percent}%）…",
-                UpdatePhase.Verifying => "下载完成，正在校验更新包…",
+                UpdatePhase.Verifying => "正在校验完整更新包…",
                 UpdatePhase.Starting => "正在打开新版联机大厅…",
+                _ when update.DownloadBytes == 0 => $"正在复用本机数据 {update.Percent}%",
+                _ when update.DownloadBytes is long bytes => $"正在增量更新 {update.Percent}%（需下载 {UpdateSize(bytes)}）",
                 _ => $"正在下载更新 {update.Percent}%"
             };
         });
@@ -153,6 +155,10 @@ public partial class Lobby
         status.Text = "正在结束更新…";
         return true;
     }
+
+    private static string UpdateSize(long bytes) => bytes < 1024 * 1024
+        ? $"{bytes / 1024d:0.#} KiB"
+        : $"{bytes / (1024d * 1024):0.#} MiB";
 
     private void ShowUpdateOffer(string hint, string nextAction = "安装更新")
     {

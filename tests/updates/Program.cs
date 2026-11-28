@@ -211,6 +211,7 @@ try
 catch (OperationCanceledException) { }
 
 Console.WriteLine("Update version, channel, redirects, interrupted downloads, saved progress, idle timeouts and SHA-256 checks passed.");
+await IncrementalUpdateChecks.RunAsync();
 
 sealed class InlineProgress(Action<UpdateProgress> report) : IProgress<UpdateProgress>
 {

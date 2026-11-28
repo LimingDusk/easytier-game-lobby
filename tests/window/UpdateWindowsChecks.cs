@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using GameLobby;
 
@@ -99,20 +100,73 @@ internal static class UpdateWindowsChecks
 
             using var relaunched = installation.TryLaunchInstalledUpdate()
                 ?? throw new InvalidOperationException("The original launcher did not open the installed version.");
-            VerifyAndClose(relaunched);
+            string installedCache = LauncherCache(sandbox, original);
+            string installedPath = Path.Combine(installedCache, package.Sha256, GitHubUpdates.AssetName);
+            VerifyAndClose(relaunched, installedPath);
+            using (var record = JsonDocument.Parse(File.ReadAllText(Path.Combine(installedCache, "installed.json"))))
+                if (!record.RootElement.EnumerateObject().Select(property => property.Name).ToHashSet().SetEquals(["Tag", "Size", "Sha256"]))
+                    throw new InvalidOperationException("The launcher receipt changed its legacy schema.");
+            CheckAlternateLauncher(sandbox, original, path, package, installedPath);
             if (File.ReadAllText(original) != "original")
                 throw new InvalidOperationException("The original launcher was modified.");
-            Console.WriteLine("Protected Windows installation, resumed download, failed checksum, window startup and persisted relaunch passed.");
+            Console.WriteLine("Protected Windows installation, resumed download, failed checksum and relaunch across launcher locations passed.");
         }
         finally { Directory.Delete(sandbox, recursive: true); }
     }
 
-    private static void VerifyAndClose(Process child)
+    private static void CheckAlternateLauncher(string sandbox, string original, string fixture, UpdatePackage package,
+        string installedPath)
+    {
+        string alternate = Path.Combine(sandbox, "Moved.exe");
+        File.Copy(original, alternate);
+        var moved = new UpdateInstallation(sandbox, alternate, Parse("0.0.0-alpha.1"));
+        using (var recovered = moved.TryLaunchInstalledUpdate() ??
+            throw new InvalidOperationException("A moved launcher did not recover the installed version."))
+            VerifyAndClose(recovered, installedPath);
+
+        string alternateCache = LauncherCache(sandbox, alternate);
+        string packageDirectory = Path.Combine(alternateCache, package.Sha256);
+        UpdateFiles.DirectoryAt(alternateCache, create: true);
+        UpdateFiles.DirectoryAt(packageDirectory, create: true);
+        string alternateExecutable = Path.Combine(packageDirectory, GitHubUpdates.AssetName);
+        using (var file = File.OpenRead(fixture))
+        using (var copy = UpdateFiles.CreateFile(alternateExecutable, FileMode.CreateNew))
+            file.CopyTo(copy);
+
+        string alternateReceipt = Path.Combine(alternateCache, "installed.json");
+        using (var receipt = UpdateFiles.CreateFile(alternateReceipt, FileMode.CreateNew))
+            JsonSerializer.Serialize(receipt, package with { Tag = "v2147483647.0.0" });
+        using (var recovered = moved.TryLaunchInstalledUpdate() ??
+            throw new InvalidOperationException("A false product version blocked a valid older receipt."))
+            VerifyAndClose(recovered, installedPath);
+
+        File.Delete(alternateReceipt);
+        using (var receipt = UpdateFiles.CreateFile(alternateReceipt, FileMode.CreateNew))
+            JsonSerializer.Serialize(receipt, package);
+        using (var exact = moved.TryLaunchInstalledUpdate() ??
+            throw new InvalidOperationException("An exact receipt was skipped for an equal release."))
+            VerifyAndClose(exact, alternateExecutable);
+
+        var current = new UpdateInstallation(sandbox, installedPath, Parse(package.Tag));
+        using var redundant = current.TryLaunchInstalledUpdate();
+        if (redundant is not null)
+        {
+            VerifyAndClose(redundant);
+            throw new InvalidOperationException("Startup tried to relaunch an already running release.");
+        }
+    }
+
+    private static string LauncherCache(string sandbox, string launcher) => Path.Combine(sandbox,
+        "EasyTierGameLobbyUpdates", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(launcher.ToUpperInvariant()))));
+
+    private static void VerifyAndClose(Process child, string? expectedPath = null)
     {
         try
         {
             // Retain a process handle before asking the window to close so ExitCode stays available.
             _ = child.SafeHandle;
+            if (expectedPath is not null && !string.Equals(child.MainModule?.FileName, expectedPath, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Startup selected the wrong cached executable.");
             if (child.MainWindowHandle == IntPtr.Zero || !child.CloseMainWindow() ||
                 !child.WaitForExit(8000))
                 throw new InvalidOperationException("The updated lobby did not open and close normally.");
